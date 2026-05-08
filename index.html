@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Not Alone Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, push, onValue, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // ඔයාගේ Firebase Config එක මෙන්න
+        const firebaseConfig = {
+            apiKey: "AIzaSyAtN7nwhc1XrYa8mGNLMQlKicFj-f5yG0k",
+            authDomain: "notalonewithgemini.firebaseapp.com",
+            projectId: "notalonewithgemini",
+            databaseURL: "https://notalonewithgemini-default-rtdb.firebaseio.com",
+            storageBucket: "notalonewithgemini.firebasestorage.app",
+            messagingSenderId: "541160542822",
+            appId: "1:541160542822:web:12570e417ed92c3f"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // Login සහ Register පද්ධතිය
+        window.handleLogin = async () => {
+            const user = document.getElementById('username').value.trim();
+            const pass = document.getElementById('password').value.trim();
+            if(!user || !pass) return alert("කරුණාකර විස්තර ඇතුළත් කරන්න.");
+
+            const userRef = ref(db, 'users/' + user);
+            const snapshot = await get(userRef);
+
+            if (!snapshot.exists()) {
+                // අලුත් කෙනෙක් නම් ඩේටාබේස් එකට දාලා WhatsApp මැසේජ් එකක් යවනවා
+                await set(userRef, { password: pass, isPaid: false });
+                const waMsg = `New Register on NotAlone:\nUsername: ${user}\nPassword: ${pass}`;
+                window.open(`https://wa.me/94773364401?text=${encodeURIComponent(waMsg)}`, '_blank');
+                alert("ඔබේ ගිණුම සෑදුවා! Admin (Anjana) විසින් එය Approve කළ පසු ලොග් විය හැක.");
+            } else {
+                const userData = snapshot.val();
+                if(userData.password === pass) {
+                    if(userData.isPaid === true) {
+                        localStorage.setItem('chatUser', user);
+                        location.reload(); // චැට් එක පෙන්වීමට Reload කරයි
+                    } else {
+                        alert("ඔබේ ගිණුම තවම සක්‍රිය නැත. රු. 100 ගෙවා Admin අමතන්න.");
+                    }
+                } else {
+                    alert("මුරපදය වැරදියි!");
+                }
+            }
+        };
+
+        // චැට් එක වැඩ කරන කොටස
+        if(localStorage.getItem('chatUser')) {
+            document.addEventListener("DOMContentLoaded", () => {
+                document.getElementById('login-box').classList.add('hidden');
+                document.getElementById('chat-box').classList.remove('hidden');
+                
+                const chatRef = ref(db, 'public_messages');
+                onValue(chatRef, (snapshot) => {
+                    const box = document.getElementById('messages');
+                    box.innerHTML = "";
+                    snapshot.forEach(child => {
+                        const msg = child.val();
+                        const isMe = msg.user === localStorage.getItem('chatUser');
+                        box.innerHTML += `
+                            <div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-2">
+                                <div class="${isMe ? 'bg-blue-600' : 'bg-slate-700'} p-3 rounded-2xl max-w-[80%] shadow-lg">
+                                    <p class="text-[10px] font-bold text-blue-300">${msg.user}</p>
+                                    <p class="text-sm">${msg.text}</p>
+                                </div>
+                            </div>`;
+                    });
+                    box.scrollTop = box.scrollHeight;
+                });
+            });
+
+            window.sendMsg = () => {
+                const text = document.getElementById('msgInput').value;
+                if(!text) return;
+                push(ref(db, 'public_messages'), {
+                    user: localStorage.getItem('chatUser'),
+                    text: text,
+                    time: new Date().toISOString()
+                });
+                document.getElementById('msgInput').value = "";
+            };
+        }
+    </script>
+    <style>
+        body { background-color: #0b0f1a; color: white; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col font-sans">
+
+    <div id="login-box" class="flex-1 flex items-center justify-center p-6">
+        <div class="glass p-8 rounded-3xl w-full max-w-sm shadow-2xl">
+            <h1 class="text-3xl font-bold text-center text-blue-400 mb-2 italic">Not Alone</h1>
+            <p class="text-center text-gray-500 text-xs mb-8">ආරක්ෂිතව අදහස් බෙදාගන්න</p>
+            <div class="space-y-4">
+                <input type="text" id="username" placeholder="User Name" class="w-full bg-slate-800 p-4 rounded-xl outline-none border border-slate-700 focus:border-blue-500">
+                <input type="password" id="password" placeholder="Password" class="w-full bg-slate-800 p-4 rounded-xl outline-none border border-slate-700 focus:border-blue-500">
+                <button onclick="handleLogin()" class="w-full bg-blue-600 py-4 rounded-xl font-bold hover:bg-blue-500 transition">Login / Register</button>
+            </div>
+            <p class="text-[10px] text-gray-600 text-center mt-6 uppercase tracking-widest">Free till May 31 • After Rs. 100</p>
+        </div>
+    </div>
+
+    <div id="chat-box" class="hidden h-screen flex flex-col">
+        <div class="p-4 bg-slate-900 border-b border-slate-800 flex justify-between items-center">
+            <h2 class="font-bold text-blue-400 italic text-lg">Not Alone</h2>
+            <button onclick="localStorage.clear(); location.reload();" class="text-xs bg-slate-800 px-3 py-1 rounded-full text-red-400">Logout</button>
+        </div>
+        
+        <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-2">
+            </div>
+
+        <div class="p-4 bg-slate-900 border-t border-slate-800 flex gap-2">
+            <input type="text" id="msgInput" placeholder="ඔබේ පණිවිඩය..." class="flex-1 bg-slate-800 p-3 rounded-xl outline-none border border-slate-700">
+            <button onclick="sendMsg()" class="bg-blue-600 px-6 py-3 rounded-xl font-bold">Send</button>
+        </div>
+    </div>
+
+</body>
+</html>
