@@ -87,6 +87,7 @@
             onDisconnect(ref(db, `queue/${myUser}`)).remove();
         }
 
+        // Real-time Online Count Logic
         onValue(ref(db, 'online'), (s) => {
             const count = s.exists() ? Object.keys(s.val()).length : 0;
             document.querySelectorAll('.online-count').forEach(el => el.innerText = `${count} Online`);
@@ -314,7 +315,7 @@
             <h1 class="text-5xl font-black italic leading-none uppercase tracking-tighter">NOT<br><span class="text-pink-500">ALONE.</span></h1>
             <div class="flex flex-col items-end gap-2">
                 <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold">Logout / අයින් වෙන්න</button>
-                <div class="items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5 hidden md:flex">
+                <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
                     <div class="online-dot animate-pulse"></div><span class="online-count text-[9px] text-emerald-400 font-bold uppercase">0 Online</span>
                 </div>
             </div>
