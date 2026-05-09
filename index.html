@@ -3,189 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Not Alone - Stranger Voice</title>
+    <title>Not Alone - Official</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background: #0a0514; color: white; overflow: hidden; }
+        body { font-family: sans-serif; background: #0a0514; color: white; }
         .glass-panel { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
         .btn-gradient { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
-        .chat-bubble-me { background: #8b5cf6; border-radius: 18px 18px 4px 18px; }
-        .chat-bubble-peer { background: #2d2d3d; border-radius: 18px 18px 18px 4px; }
+        .online-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; }
     </style>
 </head>
 <body class="p-6 h-screen flex flex-col">
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, push, onValue, get, update, onDisconnect, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, get, update, onDisconnect } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAtN7nwhc1XrYa8mGNLMQlKicFj-f5yG0k",
             authDomain: "notalonewithgemini.firebaseapp.com",
             projectId: "notalonewithgemini",
             databaseURL: "https://notalonewithgemini-default-rtdb.firebaseio.com",
-            storageBucket: "notalonewithgemini.firebasestorage.app",
             appId: "1:541160542822:web:12570e417ed92c3f"
         };
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-        const CLOUD_NAME = "dgxpyzt7c";
-        const UPLOAD_PRESET = "notalone_preset";
+        const ADMIN_USER = "admin";
+        const ADMIN_PW = "913132386V";
+        const MY_WHATSAPP = "94773364401";
 
         let myUser = localStorage.getItem('chatUser');
-        let currentChatId = null;
-        let mediaRecorder;
-        let audioChunks = [];
 
-        window.logout = () => { localStorage.removeItem('chatUser'); location.reload(); };
-        window.exitChat = async () => {
-            if(myUser) await update(ref(db, `users/${myUser}`), { currentChat: null, chattingWith: null });
-            location.reload();
+        // Online Tracking
+        if(myUser) {
+            set(ref(db, `online/${myUser}`), true);
+            onDisconnect(ref(db, `online/${myUser}`)).remove();
+        }
+        onValue(ref(db, 'online'), (s) => {
+            const count = s.exists() ? Object.keys(s.val()).length : 0;
+            document.querySelectorAll('.online-count').forEach(el => el.innerText = `${count} Online`);
+        });
+
+        // Register
+        window.handleRegister = async () => {
+            const u = document.getElementById('reg-user').value.trim();
+            const p = document.getElementById('reg-pass').value.trim();
+            if(!u || !p) return alert("Fill all!");
+            await set(ref(db, `users/${u}`), { password: p, approved: false, expiry: 0 });
+            window.open(`https://wa.me/${MY_WHATSAPP}?text=New user request: ${u}`, '_blank');
+            alert("Request sent to Admin!");
         };
 
-        window.uploadVoice = async (blob) => {
-            const formData = new FormData();
-            formData.append('file', blob);
-            formData.append('upload_preset', UPLOAD_PRESET);
-            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, { method: 'POST', body: formData });
-            const data = await res.json();
-            push(ref(db, `messages/${currentChatId}`), { u: myUser, t: data.secure_url, type: 'audio', ts: Date.now() });
-        };
-
-        window.toggleRecord = async () => {
-            if (!mediaRecorder || mediaRecorder.state === "inactive") {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                mediaRecorder.onstop = () => uploadVoice(new Blob(audioChunks, { type: 'audio/webm' }));
-                mediaRecorder.start();
-                document.getElementById('mic-btn').classList.add('animate-pulse', 'text-red-500');
-            } else {
-                mediaRecorder.stop();
-                document.getElementById('mic-btn').classList.remove('animate-pulse', 'text-red-500');
+        // Login
+        window.handleLogin = async () => {
+            const u = document.getElementById('login-user').value.trim();
+            const p = document.getElementById('login-pass').value.trim();
+            
+            if(u === ADMIN_USER && p === ADMIN_PW) {
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('admin-panel').classList.remove('hidden');
+                loadAdminData();
+                return;
             }
+
+            const s = await get(ref(db, `users/${u}`));
+            if(s.exists() && s.val().password === p) {
+                if(s.val().approved && Date.now() < s.val().expiry) {
+                    localStorage.setItem('chatUser', u);
+                    location.reload();
+                } else {
+                    alert("Account pending approval or expired!");
+                }
+            } else { alert("Invalid Credentials"); }
         };
 
-        function openChatUI(chatId, peer) {
-            currentChatId = chatId;
-            document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
-            document.getElementById('chat-screen').classList.remove('hidden');
-            document.getElementById('peer-name').innerText = peer;
-
-            onValue(ref(db, `messages/${chatId}`), (s) => {
-                const b = document.getElementById('messages');
-                b.innerHTML = "";
-                if(s.exists()){
-                    const now = Date.now();
-                    Object.entries(s.val()).forEach(([key, m]) => {
-                        if(m.type === 'text' && (now - m.ts > 259200000)) { remove(ref(db, `messages/${chatId}/${key}`)); return; }
-                        const isMe = m.u === myUser;
-                        let content = `<p class="text-sm">${m.t}</p>`;
-                        if(m.type === 'audio') content = `<audio src="${m.t}" controls class="h-8" onended="remove(ref(db,'messages/${chatId}/${key}'))"></audio>`;
-                        b.innerHTML += `<div class="flex ${isMe?'justify-end':'justify-start'} mb-4"><div class="${isMe?'chat-bubble-me':'chat-bubble-peer'} px-4 py-2 max-w-[85%]">${content}</div></div>`;
-                    });
-                    b.scrollTop = b.scrollHeight;
-                }
+        // Admin
+        function loadAdminData() {
+            onValue(ref(db, 'users'), (s) => {
+                const list = document.getElementById('user-list');
+                list.innerHTML = "";
+                Object.entries(s.val()).forEach(([u, d]) => {
+                    list.innerHTML += `<div class="glass-panel p-4 rounded-xl mb-2 flex justify-between">
+                        <div><p class="font-bold">${u} | PW: ${d.password}</p>
+                        <p class="text-xs">Exp: ${d.expiry ? new Date(d.expiry).toLocaleDateString() : 'N/A'}</p></div>
+                        <button onclick="approve('${u}')" class="bg-blue-600 px-2 rounded">Approve 30D</button>
+                    </div>`;
+                });
             });
         }
-
-        window.startChatting = async () => {
-            document.getElementById('main-dashboard').classList.add('hidden');
-            document.getElementById('loading-screen').classList.remove('hidden');
-            const qSnap = await get(ref(db, 'queue'));
-            if(qSnap.exists()){
-                const peer = Object.keys(qSnap.val()).find(u => u !== myUser);
-                if(peer){
-                    const cid = `chat_${Date.now()}`;
-                    await update(ref(db, `users/${peer}`), { currentChat: cid, chattingWith: myUser });
-                    await update(ref(db, `users/${myUser}`), { currentChat: cid, chattingWith: peer });
-                    await remove(ref(db, `queue/${peer}`));
-                    return;
-                }
-            }
-            await set(ref(db, `queue/${myUser}`), true);
-            onDisconnect(ref(db, `queue/${myUser}`)).remove();
+        window.approve = async (u) => {
+            await update(ref(db, `users/${u}`), { approved: true, expiry: Date.now() + (30 * 24 * 60 * 60 * 1000) });
         };
-
-        window.sendMsg = () => {
-            const i = document.getElementById('msg-input');
-            if(i.value && currentChatId) {
-                push(ref(db, `messages/${currentChatId}`), { u: myUser, t: i.value, type: 'text', ts: Date.now() });
-                i.value = "";
-            }
-        };
-
-        window.handleLogin = async () => {
-            const u = document.getElementById('username').value.trim();
-            const p = document.getElementById('password').value.trim();
-            const s = await get(ref(db, `users/${u}`));
-            if(s.exists() && s.val().password === p) { localStorage.setItem('chatUser', u); location.reload(); }
-            else alert("Error");
-        };
-
         window.onload = async () => {
-            if(!myUser) document.getElementById('login-screen').classList.remove('hidden');
-            else {
-                await update(ref(db, `users/${myUser}`), { currentChat: null, chattingWith: null });
+            if(myUser) {
+                const s = await get(ref(db, `users/${myUser}`));
+                if(s.exists()) document.getElementById('expire-tag').innerText = "Expire: " + new Date(s.val().expiry).toLocaleDateString();
                 document.getElementById('main-dashboard').classList.remove('hidden');
-                document.getElementById('user-tag').innerText = myUser;
-                onValue(ref(db, `users/${myUser}`), (s) => {
-                    const d = s.val();
-                    if(d?.currentChat && !document.getElementById('loading-screen').classList.contains('hidden')) {
-                        openChatUI(d.currentChat, d.chattingWith);
-                    }
-                });
-            }
+            } else { document.getElementById('login-screen').classList.remove('hidden'); }
         };
     </script>
 
-    <!-- UI -->
-    <div id="login-screen" class="screen hidden flex-1 flex flex-col justify-center max-w-sm mx-auto">
-        <h1 class="text-4xl font-black italic text-blue-500 mb-8 text-center uppercase">NOT ALONE</h1>
-        <div class="glass-panel p-8 rounded-[2.5rem]">
-            <input id="username" placeholder="Username" class="w-full bg-white/5 p-4 rounded-2xl mb-4 outline-none border border-white/5">
-            <input id="password" type="password" placeholder="Password" class="w-full bg-white/5 p-4 rounded-2xl mb-6 outline-none border border-white/5">
-            <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-black uppercase">Login</button>
-        </div>
-    </div>
-
-    <div id="main-dashboard" class="screen hidden flex-1 flex flex-col justify-center">
-        <div class="flex justify-between items-start mb-12">
-            <h1 class="text-6xl font-black italic uppercase leading-[0.85]">NOT<br><span class="text-pink-500">ALONE.</span></h1>
-            <button onclick="logout()" class="text-[10px] border border-white/20 px-4 py-2 rounded-full uppercase font-bold">Logout</button>
-        </div>
-        <p class="text-[10px] opacity-40 mb-4 uppercase">Hi, <span id="user-tag" class="text-blue-400"></span></p>
-        <button onclick="startChatting()" class="w-full btn-gradient p-10 rounded-[2.5rem] font-black text-2xl shadow-2xl uppercase">Find Stranger →</button>
-    </div>
-
-    <div id="chat-screen" class="screen hidden fixed inset-0 bg-[#0a0514] p-6 flex flex-col z-50">
-        <div class="flex justify-between items-center mb-6">
-            <h2 class="text-xl font-black italic text-blue-500 uppercase">NOT ALONE</h2>
-            <div class="flex items-center gap-3">
-                <span id="peer-name" class="text-[10px] font-bold text-purple-400 uppercase"></span>
-                <button onclick="exitChat()" class="text-[9px] bg-red-500/20 text-red-500 px-3 py-1 rounded-full uppercase font-bold">Exit</button>
-            </div>
-        </div>
-        <div id="messages" class="flex-1 overflow-y-auto mb-6 space-y-4"></div>
-        <div class="glass-panel p-2 rounded-[2.5rem] shadow-2xl">
-            <div class="flex justify-center py-3 border-b border-white/5 mb-1">
-                <button id="mic-btn" onclick="toggleRecord()" class="text-3xl p-4 bg-white/5 rounded-full">🎙️</button>
-            </div>
-            <div class="flex gap-2 p-1">
-                <input id="msg-input" placeholder="Message..." class="flex-1 bg-transparent p-4 outline-none text-sm" onkeypress="if(event.key==='Enter') sendMsg()">
-                <button onclick="sendMsg()" class="btn-gradient px-8 rounded-2xl font-black text-xs uppercase">Send</button>
+    <div id="login-screen" class="hidden flex-1 flex flex-col justify-center max-w-sm mx-auto">
+        <h1 class="text-4xl font-black text-pink-500 mb-8 text-center">NOT ALONE</h1>
+        <div class="glass-panel p-8 rounded-3xl">
+            <input id="login-user" placeholder="Username" class="w-full bg-white/5 p-4 mb-4 rounded-xl outline-none">
+            <input id="login-pass" type="password" placeholder="Password" class="w-full bg-white/5 p-4 mb-6 rounded-xl outline-none">
+            <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-xl font-bold">LOGIN</button>
+            <div id="reg-fields" class="mt-6 border-t border-white/10 pt-6">
+                <input id="reg-user" placeholder="New Username" class="w-full bg-white/5 p-4 mb-2 rounded-xl outline-none">
+                <input id="reg-pass" placeholder="New Password" class="w-full bg-white/5 p-4 mb-4 rounded-xl outline-none">
+                <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-xl font-bold">REGISTER & WHATSAPP</button>
             </div>
         </div>
     </div>
 
-    <div id="loading-screen" class="screen hidden flex-1 flex flex-col items-center justify-center">
-        <div class="w-14 h-14 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p class="text-[10px] uppercase opacity-50 animate-pulse">Finding Stranger...</p>
-        <button onclick="exitChat()" class="mt-12 text-[10px] opacity-30 underline uppercase">Cancel</button>
+    <div id="main-dashboard" class="hidden flex-1 flex flex-col justify-center">
+        <div class="flex justify-between items-center mb-10">
+            <h1 class="text-5xl font-black italic">NOT ALONE.</h1>
+            <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full">
+                <div class="online-dot"></div><span class="online-count text-xs font-bold">0 Online</span>
+            </div>
+        </div>
+        <p id="expire-tag" class="text-pink-400 font-bold mb-6">Expire: --</p>
+        <button class="w-full btn-gradient p-10 rounded-3xl font-black text-2xl">FIND STRANGER</button>
     </div>
 
+    <div id="admin-panel" class="hidden flex-1 overflow-y-auto">
+        <h2 class="text-2xl font-bold mb-4">Admin Panel</h2>
+        <div id="user-list"></div>
+        <button onclick="location.reload()" class="mt-6 bg-red-600 p-4 rounded-xl w-full">LOGOUT ADMIN</button>
+    </div>
 </body>
 </html>
