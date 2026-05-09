@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Not Alone Chat</title>
+    <title>Not Alone - Omegle Style</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, push, onValue, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, push, onValue, get, update, onDisconnect, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-        // ඔයාගේ Firebase Config එක මෙන්න
         const firebaseConfig = {
             apiKey: "AIzaSyAtN7nwhc1XrYa8mGNLMQlKicFj-f5yG0k",
             authDomain: "notalonewithgemini.firebaseapp.com",
@@ -22,108 +21,151 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
+        let currentChatId = null;
+        let myUser = localStorage.getItem('chatUser');
 
-        // Login සහ Register පද්ධතිය
+        // --- AUTH & LOGOUT ---
+        window.logout = () => { localStorage.clear(); location.reload(); };
+
         window.handleLogin = async () => {
             const user = document.getElementById('username').value.trim();
             const pass = document.getElementById('password').value.trim();
-            if(!user || !pass) return alert("කරුණාකර විස්තර ඇතුළත් කරන්න.");
+            if(user === "admin" && pass === "913132386V") {
+                localStorage.setItem('isAdmin', 'true');
+                location.reload();
+                return;
+            }
+            const snapshot = await get(ref(db, 'users/' + user));
+            if (snapshot.exists() && snapshot.val().password === pass && snapshot.val().isPaid) {
+                localStorage.setItem('chatUser', user);
+                location.reload();
+            } else { alert("Login failed. Check status or details."); }
+        };
 
-            const userRef = ref(db, 'users/' + user);
-            const snapshot = await get(userRef);
+        // --- MATCHING ENGINE ---
+        window.findChat = async () => {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('loading-screen').classList.remove('hidden');
+            
+            // Cleanup old states
+            if(myUser) await update(ref(db, `users/${myUser}`), { currentChat: null });
 
-            if (!snapshot.exists()) {
-                // අලුත් කෙනෙක් නම් ඩේටාබේස් එකට දාලා WhatsApp මැසේජ් එකක් යවනවා
-                await set(userRef, { password: pass, isPaid: false });
-                const waMsg = `New Register on NotAlone:\nUsername: ${user}\nPassword: ${pass}`;
-                window.open(`https://wa.me/94773364401?text=${encodeURIComponent(waMsg)}`, '_blank');
-                alert("ඔබේ ගිණුම සෑදුවා! Admin (Anjana) විසින් එය Approve කළ පසු ලොග් විය හැක.");
-            } else {
-                const userData = snapshot.val();
-                if(userData.password === pass) {
-                    if(userData.isPaid === true) {
-                        localStorage.setItem('chatUser', user);
-                        location.reload(); // චැට් එක පෙන්වීමට Reload කරයි
-                    } else {
-                        alert("ඔබේ ගිණුම තවම සක්‍රිය නැත. රු. 100 ගෙවා Admin අමතන්න.");
-                    }
-                } else {
-                    alert("මුරපදය වැරදියි!");
+            const queueRef = ref(db, 'queue');
+            const snapshot = await get(queueRef);
+            
+            if (snapshot.exists()) {
+                const queue = snapshot.val();
+                const peerId = Object.keys(queue)[0];
+                if (peerId !== myUser) {
+                    const chatId = `chat_${peerId}_${myUser}`;
+                    await update(ref(db, `users/${peerId}`), { currentChat: chatId });
+                    await update(ref(db, `users/${myUser}`), { currentChat: chatId });
+                    await remove(ref(db, `queue/${peerId}`));
+                    return; // StartChat triggered by listener
                 }
+            }
+            await set(ref(db, `queue/${myUser}`), true);
+            onDisconnect(ref(db, `queue/${myUser}`)).remove();
+        };
+
+        // --- CHAT SESSION ---
+        function startChat(chatId) {
+            currentChatId = chatId;
+            document.getElementById('loading-screen').classList.add('hidden');
+            document.getElementById('chat-screen').classList.remove('hidden');
+            document.getElementById('msg-input').focus();
+            
+            const chatMsgRef = ref(db, `messages/${chatId}`);
+            onValue(chatMsgRef, (s) => {
+                const b = document.getElementById('messages'); b.innerHTML = "";
+                s.forEach(c => {
+                    const m = c.val();
+                    if(m.u) {
+                        const isMe = m.u === myUser;
+                        b.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-2">
+                            <div class="${isMe ? 'bg-blue-600' : 'bg-slate-700'} px-4 py-2 rounded-2xl max-w-[85%]">
+                                <p class="text-sm">${m.t}</p>
+                            </div></div>`;
+                    }
+                });
+                b.scrollTop = b.scrollHeight;
+                if(s.val()?.status === 'ended') {
+                    document.getElementById('status-text').innerText = "Stranger disconnected.";
+                    document.getElementById('msg-area').classList.add('hidden');
+                    document.getElementById('end-options').classList.remove('hidden');
+                }
+            });
+        }
+
+        window.sendMsg = () => {
+            const t = document.getElementById('msg-input').value;
+            if(t && currentChatId) {
+                push(ref(db, `messages/${currentChatId}`), { u: myUser, t: t });
+                document.getElementById('msg-input').value = "";
             }
         };
 
-        // චැට් එක වැඩ කරන කොටස
-        if(localStorage.getItem('chatUser')) {
-            document.addEventListener("DOMContentLoaded", () => {
-                document.getElementById('login-box').classList.add('hidden');
-                document.getElementById('chat-box').classList.remove('hidden');
-                
-                const chatRef = ref(db, 'public_messages');
-                onValue(chatRef, (snapshot) => {
-                    const box = document.getElementById('messages');
-                    box.innerHTML = "";
-                    snapshot.forEach(child => {
-                        const msg = child.val();
-                        const isMe = msg.user === localStorage.getItem('chatUser');
-                        box.innerHTML += `
-                            <div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-2">
-                                <div class="${isMe ? 'bg-blue-600' : 'bg-slate-700'} p-3 rounded-2xl max-w-[80%] shadow-lg">
-                                    <p class="text-[10px] font-bold text-blue-300">${msg.user}</p>
-                                    <p class="text-sm">${msg.text}</p>
-                                </div>
-                            </div>`;
-                    });
-                    box.scrollTop = box.scrollHeight;
-                });
-            });
+        window.skipChat = async () => {
+            if(currentChatId) {
+                await set(ref(db, `messages/${currentChatId}/status`), 'ended');
+                await update(ref(db, `users/${myUser}`), { currentChat: null });
+            }
+            location.reload();
+        };
 
-            window.sendMsg = () => {
-                const text = document.getElementById('msgInput').value;
-                if(!text) return;
-                push(ref(db, 'public_messages'), {
-                    user: localStorage.getItem('chatUser'),
-                    text: text,
-                    time: new Date().toISOString()
+        // --- INITIALIZE ---
+        window.onload = () => {
+            if(!myUser) document.getElementById('login-screen').classList.remove('hidden');
+            else {
+                document.getElementById('start-screen').classList.remove('hidden');
+                onValue(ref(db, `users/${myUser}/currentChat`), (s) => {
+                    if(s.exists() && s.val()) startChat(s.val());
                 });
-                document.getElementById('msgInput').value = "";
-            };
-        }
+            }
+        };
+
     </script>
-    <style>
-        body { background-color: #0b0f1a; color: white; }
-        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
-    </style>
 </head>
-<body class="h-screen flex flex-col font-sans">
+<body class="bg-slate-900 text-white font-sans h-screen flex flex-col overflow-hidden">
 
-    <div id="login-box" class="flex-1 flex items-center justify-center p-6">
-        <div class="glass p-8 rounded-3xl w-full max-w-sm shadow-2xl">
-            <h1 class="text-3xl font-bold text-center text-blue-400 mb-2 italic">Not Alone</h1>
-            <p class="text-center text-gray-500 text-xs mb-8">ආරක්ෂිතව අදහස් බෙදාගන්න</p>
-            <div class="space-y-4">
-                <input type="text" id="username" placeholder="User Name" class="w-full bg-slate-800 p-4 rounded-xl outline-none border border-slate-700 focus:border-blue-500">
-                <input type="password" id="password" placeholder="Password" class="w-full bg-slate-800 p-4 rounded-xl outline-none border border-slate-700 focus:border-blue-500">
-                <button onclick="handleLogin()" class="w-full bg-blue-600 py-4 rounded-xl font-bold hover:bg-blue-500 transition">Login / Register</button>
-            </div>
-            <p class="text-[10px] text-gray-600 text-center mt-6 uppercase tracking-widest">Free till May 31 • After Rs. 100</p>
+    <div id="login-screen" class="hidden flex-1 flex items-center justify-center p-6">
+        <div class="bg-slate-800 p-8 rounded-[2rem] w-full max-w-sm border border-slate-700 text-center">
+            <h1 class="text-3xl font-black text-blue-400 italic mb-8">Not Alone</h1>
+            <input id="username" placeholder="Username" class="w-full bg-slate-900 p-4 rounded-xl mb-4 outline-none border border-slate-700">
+            <input id="password" type="password" placeholder="Password" class="w-full bg-slate-900 p-4 rounded-xl mb-6 outline-none border border-slate-700">
+            <button onclick="handleLogin()" class="w-full bg-blue-600 py-4 rounded-xl font-bold">Log In</button>
         </div>
     </div>
 
-    <div id="chat-box" class="hidden h-screen flex flex-col">
-        <div class="p-4 bg-slate-900 border-b border-slate-800 flex justify-between items-center">
-            <h2 class="font-bold text-blue-400 italic text-lg">Not Alone</h2>
-            <button onclick="localStorage.clear(); location.reload();" class="text-xs bg-slate-800 px-3 py-1 rounded-full text-red-400">Logout</button>
+    <div id="start-screen" class="hidden flex-1 flex flex-col items-center justify-center p-6 relative">
+        <button onclick="logout()" class="absolute top-6 right-6 text-gray-500 text-xs">Logout</button>
+        <h1 class="text-5xl font-black text-blue-500 italic mb-2">Not Alone</h1>
+        <p class="text-gray-400 mb-12">Talk to strangers!</p>
+        <button onclick="findChat()" class="bg-white text-black px-10 py-5 rounded-full text-xl font-black shadow-2xl hover:bg-blue-400 transition-all">Find Chat</button>
+    </div>
+
+    <div id="loading-screen" class="hidden flex-1 flex flex-col items-center justify-center relative">
+        <button onclick="logout()" class="absolute top-6 right-6 text-gray-500 text-xs">Logout</button>
+        <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p class="text-blue-400 font-bold">Looking for someone...</p>
+    </div>
+
+    <div id="chat-screen" class="hidden flex flex-col h-full">
+        <div class="p-4 bg-slate-800 border-b border-slate-700 flex justify-between items-center">
+            <span id="status-text" class="text-xs font-bold text-green-500 italic">● You're now chatting with a stranger.</span>
+            <button onclick="logout()" class="text-[10px] text-gray-500 uppercase">Logout</button>
         </div>
         
-        <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-2">
-            </div>
+        <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900"></div>
 
-        <div class="p-4 bg-slate-900 border-t border-slate-800 flex gap-2">
-            <input type="text" id="msgInput" placeholder="ඔබේ පණිවිඩය..." class="flex-1 bg-slate-800 p-3 rounded-xl outline-none border border-slate-700">
-            <button onclick="sendMsg()" class="bg-blue-600 px-6 py-3 rounded-xl font-bold">Send</button>
+        <div id="end-options" class="hidden p-8 text-center bg-slate-800 border-t border-slate-700">
+            <button onclick="location.reload()" class="bg-blue-600 px-8 py-3 rounded-full font-bold">Start a New Chat</button>
+        </div>
+
+        <div id="msg-area" class="p-4 bg-slate-800 border-t border-slate-700 flex gap-2">
+            <button onclick="skipChat()" class="bg-red-900/30 text-red-400 px-4 rounded-xl font-bold text-xs border border-red-900/50">Skip</button>
+            <input id="msg-input" placeholder="Type message..." class="flex-1 bg-slate-900 p-4 rounded-xl outline-none border border-slate-700" onkeypress="if(event.key==='Enter') sendMsg()">
+            <button onclick="sendMsg()" class="bg-blue-600 px-6 rounded-xl font-bold">Send</button>
         </div>
     </div>
 
