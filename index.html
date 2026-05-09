@@ -3,8 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Not Alone - Omegle Style</title>
+    <title>Not Alone - Premium Random Chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: radial-gradient(circle at top right, #1e293b, #0f172a); }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .chat-bubble-me { background: linear-gradient(135deg, #2563eb, #1d4ed8); border-radius: 20px 20px 4px 20px; }
+        .chat-bubble-peer { background: rgba(255, 255, 255, 0.07); border-radius: 20px 20px 20px 4px; }
+        .animate-pop { animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getDatabase, ref, set, push, onValue, get, update, onDisconnect, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
@@ -24,149 +35,127 @@
         let currentChatId = null;
         let myUser = localStorage.getItem('chatUser');
 
-        // --- AUTH & LOGOUT ---
         window.logout = () => { localStorage.clear(); location.reload(); };
 
         window.handleLogin = async () => {
             const user = document.getElementById('username').value.trim();
             const pass = document.getElementById('password').value.trim();
-            if(user === "admin" && pass === "913132386V") {
-                localStorage.setItem('isAdmin', 'true');
-                location.reload();
-                return;
-            }
-            const snapshot = await get(ref(db, 'users/' + user));
-            if (snapshot.exists() && snapshot.val().password === pass && snapshot.val().isPaid) {
-                localStorage.setItem('chatUser', user);
-                location.reload();
-            } else { alert("Login failed. Check status or details."); }
+            if(user === "admin" && pass === "913132386V") { localStorage.setItem('isAdmin', 'true'); location.reload(); return; }
+            const s = await get(ref(db, 'users/' + user));
+            if (s.exists() && s.val().password === pass && s.val().isPaid) { localStorage.setItem('chatUser', user); location.reload(); }
+            else { alert("Login Error: Account not active."); }
         };
 
-        // --- MATCHING ENGINE ---
         window.findChat = async () => {
             document.getElementById('start-screen').classList.add('hidden');
             document.getElementById('loading-screen').classList.remove('hidden');
-            
-            // Cleanup old states
             if(myUser) await update(ref(db, `users/${myUser}`), { currentChat: null });
-
-            const queueRef = ref(db, 'queue');
-            const snapshot = await get(queueRef);
-            
+            const snapshot = await get(ref(db, 'queue'));
             if (snapshot.exists()) {
-                const queue = snapshot.val();
-                const peerId = Object.keys(queue)[0];
+                const peerId = Object.keys(snapshot.val())[0];
                 if (peerId !== myUser) {
-                    const chatId = `chat_${peerId}_${myUser}`;
-                    await update(ref(db, `users/${peerId}`), { currentChat: chatId });
-                    await update(ref(db, `users/${myUser}`), { currentChat: chatId });
+                    const cid = `chat_${peerId}_${myUser}`;
+                    await update(ref(db, `users/${peerId}`), { currentChat: cid });
+                    await update(ref(db, `users/${myUser}`), { currentChat: cid });
                     await remove(ref(db, `queue/${peerId}`));
-                    return; // StartChat triggered by listener
+                    return;
                 }
             }
             await set(ref(db, `queue/${myUser}`), true);
             onDisconnect(ref(db, `queue/${myUser}`)).remove();
         };
 
-        // --- CHAT SESSION ---
         function startChat(chatId) {
             currentChatId = chatId;
             document.getElementById('loading-screen').classList.add('hidden');
             document.getElementById('chat-screen').classList.remove('hidden');
-            document.getElementById('msg-input').focus();
-            
-            const chatMsgRef = ref(db, `messages/${chatId}`);
-            onValue(chatMsgRef, (s) => {
+            onValue(ref(db, `messages/${chatId}`), (s) => {
                 const b = document.getElementById('messages'); b.innerHTML = "";
                 s.forEach(c => {
                     const m = c.val();
                     if(m.u) {
                         const isMe = m.u === myUser;
-                        b.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-2">
-                            <div class="${isMe ? 'bg-blue-600' : 'bg-slate-700'} px-4 py-2 rounded-2xl max-w-[85%]">
-                                <p class="text-sm">${m.t}</p>
+                        b.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-4 animate-pop">
+                            <div class="${isMe ? 'chat-bubble-me' : 'chat-bubble-peer'} px-5 py-3 shadow-xl max-w-[80%]">
+                                <p class="text-[15px] leading-relaxed">${m.t}</p>
                             </div></div>`;
                     }
                 });
                 b.scrollTop = b.scrollHeight;
-                if(s.val()?.status === 'ended') {
-                    document.getElementById('status-text').innerText = "Stranger disconnected.";
-                    document.getElementById('msg-area').classList.add('hidden');
-                    document.getElementById('end-options').classList.remove('hidden');
+                if(s.val()?.status === 'ended') { 
+                    document.getElementById('info-tag').innerText = "Stranger Left.";
+                    document.getElementById('input-bar').classList.add('hidden');
+                    document.getElementById('reconnect-btn').classList.remove('hidden');
                 }
             });
         }
 
         window.sendMsg = () => {
-            const t = document.getElementById('msg-input').value;
-            if(t && currentChatId) {
-                push(ref(db, `messages/${currentChatId}`), { u: myUser, t: t });
-                document.getElementById('msg-input').value = "";
-            }
+            const i = document.getElementById('msg-input');
+            if(i.value && currentChatId) { push(ref(db, `messages/${currentChatId}`), { u: myUser, t: i.value }); i.value = ""; }
         };
 
-        window.skipChat = async () => {
-            if(currentChatId) {
-                await set(ref(db, `messages/${currentChatId}/status`), 'ended');
-                await update(ref(db, `users/${myUser}`), { currentChat: null });
-            }
-            location.reload();
-        };
-
-        // --- INITIALIZE ---
         window.onload = () => {
             if(!myUser) document.getElementById('login-screen').classList.remove('hidden');
             else {
                 document.getElementById('start-screen').classList.remove('hidden');
-                onValue(ref(db, `users/${myUser}/currentChat`), (s) => {
-                    if(s.exists() && s.val()) startChat(s.val());
-                });
+                onValue(ref(db, `users/${myUser}/currentChat`), (s) => { if(s.exists() && s.val()) startChat(s.val()); });
             }
         };
-
     </script>
 </head>
-<body class="bg-slate-900 text-white font-sans h-screen flex flex-col overflow-hidden">
+<body class="text-slate-100 h-screen flex flex-col overflow-hidden">
 
     <div id="login-screen" class="hidden flex-1 flex items-center justify-center p-6">
-        <div class="bg-slate-800 p-8 rounded-[2rem] w-full max-w-sm border border-slate-700 text-center">
-            <h1 class="text-3xl font-black text-blue-400 italic mb-8">Not Alone</h1>
-            <input id="username" placeholder="Username" class="w-full bg-slate-900 p-4 rounded-xl mb-4 outline-none border border-slate-700">
-            <input id="password" type="password" placeholder="Password" class="w-full bg-slate-900 p-4 rounded-xl mb-6 outline-none border border-slate-700">
-            <button onclick="handleLogin()" class="w-full bg-blue-600 py-4 rounded-xl font-bold">Log In</button>
+        <div class="glass p-10 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl">
+            <h1 class="text-4xl font-extrabold text-white italic mb-2">Not Alone</h1>
+            <p class="text-slate-400 text-xs mb-10 tracking-widest uppercase">Premium Access</p>
+            <input id="username" placeholder="Username" class="w-full bg-slate-900/50 p-4 rounded-2xl mb-4 outline-none border border-white/10 focus:border-blue-500 transition-all">
+            <input id="password" type="password" placeholder="Password" class="w-full bg-slate-900/50 p-4 rounded-2xl mb-8 outline-none border border-white/10 focus:border-blue-500 transition-all">
+            <button onclick="handleLogin()" class="w-full bg-blue-600 py-4 rounded-2xl font-bold shadow-lg shadow-blue-600/20 active:scale-95 transition-all">Sign In</button>
         </div>
     </div>
 
-    <div id="start-screen" class="hidden flex-1 flex flex-col items-center justify-center p-6 relative">
-        <button onclick="logout()" class="absolute top-6 right-6 text-gray-500 text-xs">Logout</button>
-        <h1 class="text-5xl font-black text-blue-500 italic mb-2">Not Alone</h1>
-        <p class="text-gray-400 mb-12">Talk to strangers!</p>
-        <button onclick="findChat()" class="bg-white text-black px-10 py-5 rounded-full text-xl font-black shadow-2xl hover:bg-blue-400 transition-all">Find Chat</button>
-    </div>
-
-    <div id="loading-screen" class="hidden flex-1 flex flex-col items-center justify-center relative">
-        <button onclick="logout()" class="absolute top-6 right-6 text-gray-500 text-xs">Logout</button>
-        <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p class="text-blue-400 font-bold">Looking for someone...</p>
-    </div>
-
-    <div id="chat-screen" class="hidden flex flex-col h-full">
-        <div class="p-4 bg-slate-800 border-b border-slate-700 flex justify-between items-center">
-            <span id="status-text" class="text-xs font-bold text-green-500 italic">● You're now chatting with a stranger.</span>
-            <button onclick="logout()" class="text-[10px] text-gray-500 uppercase">Logout</button>
+    <div id="start-screen" class="hidden flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <button onclick="logout()" class="absolute top-8 right-8 text-slate-500 hover:text-white transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+        </button>
+        <div class="w-24 h-24 bg-blue-600 rounded-full mb-8 flex items-center justify-center shadow-2xl shadow-blue-600/40">
+            <span class="text-4xl">👋</span>
         </div>
+        <h1 class="text-5xl font-black mb-4 italic tracking-tighter">NOT ALONE.</h1>
+        <p class="text-slate-400 max-w-xs mb-12 leading-relaxed">ඔබට දැන් තනියක් නෑ. ලෝකය වටා සිටින නන්නාඳුනන මිතුරන් සමඟ කතා කරන්න.</p>
+        <button onclick="findChat()" class="bg-white text-slate-950 px-12 py-5 rounded-full text-lg font-extrabold shadow-2xl hover:scale-105 active:scale-95 transition-all">Find a Stranger</button>
+    </div>
+
+    <div id="loading-screen" class="hidden flex-1 flex flex-col items-center justify-center">
+        <div class="relative w-20 h-20 mb-8">
+            <div class="absolute inset-0 border-4 border-blue-600/20 rounded-full"></div>
+            <div class="absolute inset-0 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+        <p class="text-blue-400 font-bold tracking-widest animate-pulse">SEARCHING...</p>
+    </div>
+
+    <div id="chat-screen" class="hidden flex flex-col h-full bg-slate-950/50">
+        <header class="p-6 glass border-b border-white/5 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                <span id="info-tag" class="text-sm font-bold tracking-tight text-slate-300">Live Chat</span>
+            </div>
+            <button onclick="location.reload()" class="text-xs bg-white/5 px-4 py-2 rounded-full hover:bg-white/10 transition-all border border-white/5">New Chat</button>
+        </header>
         
-        <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900"></div>
+        <div id="messages" class="flex-1 overflow-y-auto p-6 space-y-2"></div>
 
-        <div id="end-options" class="hidden p-8 text-center bg-slate-800 border-t border-slate-700">
-            <button onclick="location.reload()" class="bg-blue-600 px-8 py-3 rounded-full font-bold">Start a New Chat</button>
+        <div id="reconnect-btn" class="hidden p-8 text-center animate-pop">
+            <button onclick="location.reload()" class="bg-blue-600 px-10 py-4 rounded-full font-bold shadow-xl">Find Someone Else</button>
         </div>
 
-        <div id="msg-area" class="p-4 bg-slate-800 border-t border-slate-700 flex gap-2">
-            <button onclick="skipChat()" class="bg-red-900/30 text-red-400 px-4 rounded-xl font-bold text-xs border border-red-900/50">Skip</button>
-            <input id="msg-input" placeholder="Type message..." class="flex-1 bg-slate-900 p-4 rounded-xl outline-none border border-slate-700" onkeypress="if(event.key==='Enter') sendMsg()">
-            <button onclick="sendMsg()" class="bg-blue-600 px-6 rounded-xl font-bold">Send</button>
-        </div>
+        <footer id="input-bar" class="p-6 glass border-t border-white/5 flex gap-3">
+            <button onclick="location.reload()" class="bg-red-500/10 text-red-500 px-5 rounded-2xl font-bold text-xs border border-red-500/20 hover:bg-red-500/20 transition-all">Skip</button>
+            <input id="msg-input" placeholder="Say something nice..." class="flex-1 bg-slate-900/80 p-4 rounded-2xl outline-none border border-white/5 focus:border-blue-500 transition-all text-sm" onkeypress="if(event.key==='Enter') sendMsg()">
+            <button onclick="sendMsg()" class="bg-blue-600 px-8 rounded-2xl font-bold shadow-lg shadow-blue-600/20">Send</button>
+        </footer>
     </div>
 
 </body>
