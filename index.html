@@ -9,24 +9,20 @@
         const manifest = {
             "name": "Not Alone",
             "short_name": "Not Alone",
-            "description": "Sri Lanka's Private Stranger Chat Platform",
-            "start_url": "https://notalone-official.vercel.app/",
+            "start_url": ".",
             "display": "standalone",
             "background_color": "#0a0514",
             "theme_color": "#0a0514",
             "icons": [{
                 "src": "https://raw.githubusercontent.com/anjanachathurangajob-web/notalone-official/main/icon.png",
                 "sizes": "512x512",
-                "type": "image/png",
-                "purpose": "any maskable"
+                "type": "image/png"
             }]
         };
-        const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+        const stringManifest = JSON.stringify(manifest);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
         const manifestURL = URL.createObjectURL(blob);
-        const link = document.createElement('link');
-        link.rel = 'manifest';
-        link.href = manifestURL;
-        document.head.appendChild(link);
+        document.querySelector('head').insertAdjacentHTML('beforeend', `<link rel="manifest" href="${manifestURL}">`);
     </script>
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -50,26 +46,25 @@
             width: 100vw;
         }
 
-        /* HEADER FIX */
+        /* HEADER */
         .chat-header {
             height: 60px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 0 16px;
-            background: #0a0514;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             flex-shrink: 0;
         }
 
-        /* MESSAGE AREA FIX */
+        /* MESSAGE AREA */
         #chat-messages {
             flex-grow: 1;
             overflow-y: auto;
             padding: 20px 16px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
             -webkit-overflow-scrolling: touch;
         }
         #chat-messages::-webkit-scrollbar { width: 0; }
@@ -101,13 +96,13 @@
                     <input id="login-user" placeholder="Username / නම" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm border border-white/5">
                     <input id="login-pass" type="password" placeholder="Password / මුරපදය" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm border border-white/5">
                     <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-bold uppercase shadow-lg">Login / ඇතුල් වන්න</button>
-                    <p onclick="toggleReg(true)" class="text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold tracking-widest">New Account? / ලියාපදිංචි වන්න</p>
+                    <p onclick="document.getElementById('login-box').classList.add('hidden'); document.getElementById('reg-box').classList.remove('hidden');" class="text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold tracking-widest">New? Register / ලියාපදිංචි වන්න</p>
                 </div>
                 <div id="reg-box" class="hidden">
                     <input id="reg-user" placeholder="New Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm border border-white/5">
                     <input id="reg-pass" placeholder="New Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm border border-white/5">
-                    <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase shadow-lg">Register / ලියාපදිංචි වන්න</button>
-                    <p onclick="toggleReg(false)" class="text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold tracking-widest">Back / ආපසු</p>
+                    <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase">Register / ලියාපදිංචි වන්න</button>
+                    <p onclick="document.getElementById('reg-box').classList.add('hidden'); document.getElementById('login-box').classList.remove('hidden');" class="text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold tracking-widest">Back / ආපසු</p>
                 </div>
             </div>
         </div>
@@ -120,29 +115,29 @@
                         <div class="online-dot animate-pulse"></div><span class="online-count text-[9px] text-emerald-400 font-bold uppercase">0 Online</span>
                     </div>
                 </div>
-                <p id="days-tag" class="text-[9px] bg-emerald-500/10 text-emerald-400 px-4 py-1 rounded-full inline-block mb-10 font-black uppercase tracking-widest border border-emerald-500/20">-- Days Remaining</p>
+                <p id="days-tag" class="text-[9px] bg-emerald-500/10 text-emerald-400 px-4 py-1 rounded-full inline-block mb-10 font-black uppercase border border-emerald-500/20 tracking-widest">-- Days Remaining</p>
                 <button onclick="findStranger()" class="w-full btn-gradient p-14 rounded-[3rem] font-black text-2xl uppercase shadow-2xl active:scale-95 transition-all">Find Stranger →</button>
                 <button onclick="logout()" class="w-full mt-10 text-[9px] opacity-20 uppercase font-black tracking-widest">Sign Out / අයින් වන්න</button>
             </div>
         </div>
 
-        <div id="searching-ui" class="hidden flex-1 flex items-center justify-center text-center">
-            <div>
-                <div class="w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                <p class="mt-4 font-bold animate-pulse text-xs uppercase tracking-widest text-pink-500">Searching... සොයමින්...</p>
-                <button onclick="location.reload()" class="mt-10 text-[10px] opacity-40 underline uppercase font-bold">Cancel / අවලංගු කරන්න</button>
-            </div>
+        <div id="searching-ui" class="hidden flex-1 flex flex-col items-center justify-center text-center">
+            <div class="w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+            <p class="mt-4 font-bold animate-pulse text-xs uppercase tracking-widest text-pink-500">Searching... සොයමින්...</p>
+            <button onclick="location.reload()" class="mt-10 text-[10px] opacity-40 underline uppercase font-bold">Cancel / අවලංගු කරන්න</button>
         </div>
 
         <div id="chat-screen" class="hidden flex flex-col h-full">
             <div class="chat-header">
                 <button onclick="logout()" class="text-[9px] text-white/40 uppercase font-bold">Logout</button>
                 <div class="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full">
-                    <div class="online-dot animate-pulse"></div><span class="online-count text-[8px] text-emerald-400 font-bold">0 Online</span>
+                    <div class="online-dot animate-pulse"></div><span class="online-count text-[8px] text-emerald-400 font-bold uppercase">0 Online</span>
                 </div>
                 <button onclick="endChat()" class="bg-red-500/10 text-red-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase border border-red-500/20">End / අවසන්</button>
             </div>
+            
             <div id="chat-messages"></div>
+            
             <div class="input-wrapper">
                 <div class="flex gap-2 items-center bg-white/5 p-2 rounded-[2rem] border border-white/10 shadow-2xl">
                     <button id="record-btn" onclick="toggleRecord()" class="bg-white/10 w-11 h-11 rounded-full text-[8px] font-black uppercase flex-shrink-0">Voice</button>
@@ -187,11 +182,6 @@
         let audioChunks = [];
         let lastMsgCount = 0;
 
-        window.toggleReg = (show) => {
-            document.getElementById('login-box').classList.toggle('hidden', show);
-            document.getElementById('reg-box').classList.toggle('hidden', !show);
-        };
-
         window.logout = () => { localStorage.clear(); location.reload(); };
 
         if(myUser) {
@@ -227,9 +217,15 @@
             if(!u || !p) return alert("Fill all fields!");
             const check = await get(ref(db, `users/${u}`));
             if(check.exists()) return alert("Username taken!");
+            
             await set(ref(db, `users/${u}`), { password: p, approved: false, expiry: 0 });
-            window.location.href = `https://wa.me/${MY_WHATSAPP}?text=${encodeURIComponent("Hi Admin, I just registered on Not Alone: " + u)}`;
-            setTimeout(() => location.reload(), 2000);
+            
+            // iPhone WhatsApp Fix
+            const msg = `Hi Admin, I just registered on Not Alone.\nUsername: ${u}\nPlease approve my account.`;
+            const waUrl = `https://wa.me/${MY_WHATSAPP}?text=${encodeURIComponent(msg)}`;
+            
+            alert("Registration successful! Opening WhatsApp for approval...");
+            window.location.href = waUrl;
         };
 
         window.findStranger = async () => {
@@ -311,7 +307,7 @@
                     };
                     mediaRecorder.start();
                     btn.classList.add('recording'); btn.innerText = "REC";
-                } catch(e) { alert("Mic error! / මයික්‍රොෆෝනයට අවසර දෙන්න."); }
+                } catch(e) { alert("Mic error! Please allow microphone access."); }
             } else { mediaRecorder.stop(); btn.classList.remove('recording'); btn.innerText = "VOICE"; }
         };
 
@@ -334,8 +330,8 @@
                     list.innerHTML += `<div class="p-4 rounded-xl mb-3 flex justify-between items-center ${d.approved ? 'bg-emerald-500/20 border border-emerald-500/30' : 'glass-panel'}">
                         <p class="font-bold text-sm">${u}</p>
                         <div class="flex gap-2">
-                            <button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-1 rounded-lg text-[9px] font-bold">Approve</button>
-                            <button onclick="deleteUser('${u}')" class="bg-red-600 px-3 py-1 rounded-lg text-[9px] font-bold">Del</button>
+                            <button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-1 rounded-lg text-[9px] font-bold uppercase">Approve</button>
+                            <button onclick="deleteUser('${u}')" class="bg-red-600 px-3 py-1 rounded-lg text-[9px] font-bold uppercase">Del</button>
                         </div>
                     </div>`;
                 });
@@ -356,3 +352,4 @@
         };
     </script>
 </body>
+</html>
