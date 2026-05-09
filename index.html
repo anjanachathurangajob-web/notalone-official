@@ -10,22 +10,16 @@
             "name": "Not Alone",
             "short_name": "Not Alone",
             "description": "Sri Lanka's Private Stranger Chat Platform",
-            "start_url": "/",
+            "start_url": "https://notalone-official.vercel.app/",
             "display": "standalone",
             "background_color": "#0a0514",
             "theme_color": "#0a0514",
             "icons": [
                 {
                     "src": "https://raw.githubusercontent.com/anjanachathurangajob-web/notalone-official/main/icon.png",
-                    "sizes": "192x192",
-                    "type": "image/png",
-                    "purpose": "any"
-                },
-                {
-                    "src": "https://raw.githubusercontent.com/anjanachathurangajob-web/notalone-official/main/icon.png",
                     "sizes": "512x512",
                     "type": "image/png",
-                    "purpose": "maskable"
+                    "purpose": "any maskable"
                 }
             ]
         };
@@ -39,18 +33,55 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0514; color: white; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        /* Layout Structure Fixes for Scrolling */
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #0a0514; 
+            color: white; 
+            overflow: hidden; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            margin: 0;
+        }
+
         .glass-panel { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
         .btn-gradient { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
         .online-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; }
+
+        /* Message Area - Fixed Overlap */
+        #chat-messages {
+            flex: 1; /* Takes all available space between header and input */
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 15px 0;
+            display: flex;
+            flex-direction: column;
+        }
+        
         #chat-messages::-webkit-scrollbar { width: 0; }
+
+        /* Input Wrapper - Always stays at bottom */
+        .input-wrapper {
+            background: #0a0514;
+            padding: 10px 16px 30px 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            width: 100%;
+        }
+
         .recording { animation: pulse 1.5s infinite; background: #ef4444 !important; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        .chat-input-area { position: fixed; bottom: 20px; left: 24px; right: 24px; z-index: 50; }
-        .chat-container { padding-bottom: 90px; }
+        
+        #chat-screen, #main-dashboard, #login-screen, #admin-panel, #searching-ui {
+            height: 100vh;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .hidden { display: none !important; }
     </style>
 </head>
-<body class="p-6">
+<body>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -108,7 +139,6 @@
             } else alert("Invalid Login!");
         };
 
-        // FIXED: iPhone & All Devices friendly Register Function
         window.handleRegister = async () => {
             const u = document.getElementById('reg-user').value.trim();
             const p = document.getElementById('reg-pass').value.trim();
@@ -116,15 +146,9 @@
             const check = await get(ref(db, `users/${u}`));
             if(check.exists()) return alert("Username used!");
             await set(ref(db, `users/${u}`), { password: p, approved: false, expiry: 0 });
-            
             const msg = `Hi Admin, I just registered on Not Alone.\nUsername: ${u}\nPlease approve my account.`;
-            
-            // Redirecting instead of window.open for better compatibility
             window.location.href = `https://wa.me/${MY_WHATSAPP}?text=${encodeURIComponent(msg)}`;
-            
-            setTimeout(() => {
-                location.reload();
-            }, 2000);
+            setTimeout(() => location.reload(), 2000);
         };
 
         window.findStranger = async () => {
@@ -167,8 +191,9 @@
             document.getElementById('searching-ui').classList.add('hidden');
             document.getElementById('chat-screen').classList.remove('hidden');
             
+            const msgBox = document.getElementById('chat-messages');
+
             onValue(ref(db, `rooms/${roomId}/messages`), (s) => {
-                const msgBox = document.getElementById('chat-messages');
                 msgBox.innerHTML = "";
                 if(s.exists()) {
                     const messages = Object.values(s.val());
@@ -182,11 +207,15 @@
                     messages.forEach(m => {
                         const isMe = m.sender === myUser;
                         let content = m.type === 'text' ? m.text : `<audio controls class="h-8 w-40"><source src="${m.audio}" type="audio/webm"></audio>`;
-                        msgBox.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-2">
-                            <div class="${isMe ? 'bg-pink-600' : 'bg-white/10'} p-3 rounded-2xl max-w-[80%] text-sm">${content}</div>
+                        msgBox.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-2 px-4">
+                            <div class="${isMe ? 'bg-pink-600' : 'bg-white/10'} p-3 rounded-2xl max-w-[85%] text-sm">${content}</div>
                         </div>`;
                     });
-                    msgBox.scrollTop = msgBox.scrollHeight;
+                    
+                    // FORCED AUTO-SCROLL FIX
+                    setTimeout(() => {
+                        msgBox.scrollTop = msgBox.scrollHeight;
+                    }, 150);
                 }
             });
 
@@ -194,12 +223,11 @@
                 if(s.exists()) {
                     const active = s.val();
                     if (active.length < 2 && active.includes(myUser)) {
-                        const msgBox = document.getElementById('chat-messages');
                         if (!document.getElementById('left-msg')) {
                             msgBox.innerHTML += `
                                 <div id="left-msg" class="text-center my-6">
                                     <p class="text-red-400 text-[10px] uppercase font-bold mb-3 tracking-widest opacity-60">Partner has left the chat</p>
-                                    <button onclick="findStranger()" class="btn-gradient px-6 py-2 rounded-full text-[10px] font-black uppercase shadow-lg">New Chat / නව චැට් එකක්</button>
+                                    <button onclick="findStranger()" class="btn-gradient px-6 py-2 rounded-full text-[10px] font-black uppercase shadow-lg">New Chat</button>
                                 </div>`;
                             msgBox.scrollTop = msgBox.scrollHeight;
                             currentRoom = null;
@@ -212,18 +240,20 @@
         window.toggleRecord = async () => {
             const btn = document.getElementById('record-btn');
             if (!mediaRecorder || mediaRecorder.state === "inactive") {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                mediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    const reader = new FileReader();
-                    reader.readAsDataURL(audioBlob);
-                    reader.onloadend = () => { if(currentRoom) push(ref(db, `rooms/${currentRoom}/messages`), { sender: myUser, type: 'voice', audio: reader.result, time: Date.now() }); };
-                };
-                mediaRecorder.start();
-                btn.classList.add('recording'); btn.innerText = "REC";
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const reader = new FileReader();
+                        reader.readAsDataURL(audioBlob);
+                        reader.onloadend = () => { if(currentRoom) push(ref(db, `rooms/${currentRoom}/messages`), { sender: myUser, type: 'voice', audio: reader.result, time: Date.now() }); };
+                    };
+                    mediaRecorder.start();
+                    btn.classList.add('recording'); btn.innerText = "REC";
+                } catch(e) { alert("Mic error!"); }
             } else { mediaRecorder.stop(); btn.classList.remove('recording'); btn.innerText = "VOICE"; }
         };
 
@@ -253,10 +283,10 @@
                 Object.entries(s.val()).forEach(([u, d]) => {
                     const isApproved = d.approved === true;
                     list.innerHTML += `<div class="p-4 rounded-xl mb-3 flex justify-between items-center ${isApproved ? 'bg-emerald-500/20 border border-emerald-500/30' : 'glass-panel'}">
-                        <div><p class="font-bold text-sm ${isApproved ? 'text-emerald-400' : 'text-white'}">${u}</p><p class="text-[9px] opacity-60">PW: ${d.password}</p></div>
+                        <div><p class="font-bold text-sm ${isApproved ? 'text-emerald-400' : 'text-white'}">${u}</p></div>
                         <div class="flex gap-2">
-                            <button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-1 rounded-lg text-[9px] font-bold uppercase">Approve</button>
-                            <button onclick="deleteUser('${u}')" class="bg-red-600 px-3 py-1 rounded-lg text-[9px] font-bold uppercase">Del</button>
+                            <button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-1 rounded-lg text-[9px] font-bold">Approve</button>
+                            <button onclick="deleteUser('${u}')" class="bg-red-600 px-3 py-1 rounded-lg text-[9px] font-bold">Del</button>
                         </div>
                     </div>`;
                 });
@@ -277,68 +307,73 @@
         };
     </script>
 
-    <div id="searching-ui" class="hidden flex-1 flex flex-col justify-center items-center text-center">
-        <div class="w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
-        <p class="mt-4 font-bold animate-pulse text-xs uppercase tracking-widest">Stranger කෙනෙක් සොයමින්...<br>Finding Stranger...</p>
-        <button onclick="location.reload()" class="mt-10 text-[10px] opacity-40 underline uppercase font-bold">Cancel / අවලංගු කරන්න</button>
+    <div id="searching-ui" class="hidden flex justify-center items-center text-center p-6">
+        <div>
+            <div class="w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <p class="mt-4 font-bold animate-pulse text-xs uppercase tracking-widest text-pink-500">Searching...</p>
+            <button onclick="location.reload()" class="mt-10 text-[10px] opacity-40 underline uppercase font-bold">Cancel</button>
+        </div>
     </div>
 
-    <div id="chat-screen" class="hidden flex-1 flex flex-col chat-container">
-        <div class="flex justify-between items-center pb-3 border-b border-white/10">
-            <button onclick="logout()" class="text-[9px] text-white/40 uppercase font-bold">Logout / අයින් වෙන්න</button>
-            <button onclick="endChat()" class="bg-red-500/10 text-red-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase border border-red-500/20">End Chat / අවසන් කරන්න</button>
+    <div id="chat-screen" class="hidden">
+        <div class="flex justify-between items-center p-4 border-b border-white/10">
+            <button onclick="logout()" class="text-[9px] text-white/40 uppercase font-bold">Logout</button>
+            <button onclick="endChat()" class="bg-red-500/10 text-red-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase border border-red-500/20">End Chat</button>
         </div>
-        <div id="chat-messages" class="flex-1 overflow-y-auto py-4 px-2"></div>
-        <div class="chat-input-area">
-            <div class="flex gap-2 items-center bg-[#1a1425] p-2 rounded-[2rem] border border-white/10 shadow-2xl">
-                <button id="record-btn" onclick="toggleRecord()" class="bg-white/10 w-12 h-12 rounded-full text-[8px] font-black uppercase">Voice</button>
-                <input id="msg-input" placeholder="Message... පණිවිඩයක්..." class="flex-1 bg-transparent p-2 outline-none text-sm">
-                <button onclick="sendMsg()" class="btn-gradient w-12 h-12 rounded-full font-black text-[8px]">SEND</button>
+        
+        <div id="chat-messages"></div>
+        
+        <div class="input-wrapper">
+            <div class="flex gap-2 items-center bg-white/5 p-2 rounded-[2rem] border border-white/10 shadow-2xl">
+                <button id="record-btn" onclick="toggleRecord()" class="bg-white/10 w-11 h-11 rounded-full text-[8px] font-black uppercase flex-shrink-0">Voice</button>
+                <input id="msg-input" placeholder="Message..." class="flex-1 bg-transparent p-2 outline-none text-sm">
+                <button onclick="sendMsg()" class="btn-gradient w-11 h-11 rounded-full font-black text-[8px] flex-shrink-0">SEND</button>
             </div>
         </div>
     </div>
 
-    <div id="login-screen" class="hidden flex-1 flex flex-col justify-center max-w-sm mx-auto">
-        <h1 class="text-center text-4xl font-black text-pink-500 mb-8 italic uppercase">Not Alone</h1>
-        <div class="glass-panel p-8 rounded-[2.5rem]">
-            <div id="login-box">
-                <input id="login-user" placeholder="Username (පරිශීලක නාමය)" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm border border-white/5">
-                <input id="login-pass" type="password" placeholder="Password (මුරපදය)" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm border border-white/5">
-                <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-bold uppercase shadow-lg">Login / ඇතුල් වන්න</button>
-                <p onclick="document.getElementById('login-box').classList.add('hidden'); document.getElementById('reg-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">New? Register Here / ලියාපදිංචි වන්න</p>
-            </div>
-            <div id="reg-box" class="hidden">
-                <input id="reg-user" placeholder="New Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm">
-                <input id="reg-pass" placeholder="New Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm">
-                <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase">Register / ලියාපදිංචි වන්න</button>
-                <p onclick="document.getElementById('reg-box').classList.add('hidden'); document.getElementById('login-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">Back to Login / ආපසු</p>
-            </div>
-        </div>
-    </div>
-
-    <div id="main-dashboard" class="hidden flex-1 flex flex-col justify-center">
-        <div class="flex justify-between items-start mb-8">
-            <h1 class="text-5xl font-black italic leading-none uppercase tracking-tighter">NOT<br><span class="text-pink-500">ALONE.</span></h1>
-            <div class="flex flex-col items-end gap-2">
-                <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold">Logout / අයින් වෙන්න</button>
-                <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
-                    <div class="online-dot animate-pulse"></div><span class="online-count text-[9px] text-emerald-400 font-bold uppercase">0 Online</span>
+    <div id="login-screen" class="hidden flex justify-center items-center p-6">
+        <div class="w-full max-w-xs">
+            <h1 class="text-center text-4xl font-black text-pink-500 mb-8 italic uppercase tracking-tighter">Not Alone</h1>
+            <div class="glass-panel p-8 rounded-[2.5rem]">
+                <div id="login-box">
+                    <input id="login-user" placeholder="Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm">
+                    <input id="login-pass" type="password" placeholder="Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm">
+                    <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-bold uppercase">Login</button>
+                    <p onclick="document.getElementById('login-box').classList.add('hidden'); document.getElementById('reg-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">New Account</p>
+                </div>
+                <div id="reg-box" class="hidden">
+                    <input id="reg-user" placeholder="Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm">
+                    <input id="reg-pass" placeholder="Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm">
+                    <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase">Register</button>
+                    <p onclick="document.getElementById('reg-box').classList.add('hidden'); document.getElementById('login-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">Back</p>
                 </div>
             </div>
         </div>
-        <p id="days-tag" class="text-[9px] bg-emerald-500/10 text-emerald-400 px-4 py-1 rounded-full self-start mb-10 border border-emerald-500/20 font-black uppercase">-- Days</p>
-        <button onclick="findStranger()" class="btn-gradient p-14 rounded-[3rem] font-black text-2xl uppercase shadow-2xl active:scale-95 transition-all">Find Stranger →</button>
     </div>
 
-    <div id="admin-panel" class="hidden flex-1 flex flex-col">
+    <div id="main-dashboard" class="hidden flex justify-center items-center p-8">
+        <div class="w-full">
+            <div class="flex justify-between items-start mb-12">
+                <h1 class="text-5xl font-black italic leading-none uppercase tracking-tighter">NOT<br><span class="text-pink-500">ALONE.</span></h1>
+                <div class="flex flex-col items-end gap-2">
+                    <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
+                        <div class="online-dot animate-pulse"></div><span class="online-count text-[9px] text-emerald-400 font-bold uppercase">0 Online</span>
+                    </div>
+                </div>
+            </div>
+            <p id="days-tag" class="text-[9px] bg-emerald-500/10 text-emerald-400 px-4 py-1 rounded-full inline-block mb-10 font-black uppercase tracking-widest border border-emerald-500/20">-- Days</p>
+            <button onclick="findStranger()" class="w-full btn-gradient p-14 rounded-[3rem] font-black text-2xl uppercase shadow-2xl active:scale-95 transition-all">Find Stranger →</button>
+            <button onclick="logout()" class="w-full mt-10 text-[9px] opacity-20 uppercase font-black tracking-widest">Sign Out</button>
+        </div>
+    </div>
+
+    <div id="admin-panel" class="hidden p-6 overflow-y-auto">
         <div class="flex justify-between items-center mb-6">
             <h2 class="font-black text-blue-500 uppercase italic">Admin Panel</h2>
-            <div class="flex gap-2">
-                <button onclick="logout()" class="text-[9px] bg-red-500/20 text-red-500 px-3 py-1 rounded-full uppercase font-bold">Logout</button>
-                <button onclick="location.reload()" class="text-[9px] bg-white/10 px-3 py-1 rounded-full uppercase font-bold">Exit</button>
-            </div>
+            <button onclick="location.reload()" class="text-[9px] bg-white/10 px-3 py-1 rounded-full uppercase font-bold">Exit</button>
         </div>
-        <div id="user-list" class="flex-1 overflow-y-auto"></div>
+        <div id="user-list"></div>
     </div>
 
 </body>
