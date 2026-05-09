@@ -3,117 +3,122 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Not Alone - UI Fix</title>
+    <title>Not Alone - Private Chat</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* FULL FIX FOR SCREEN OVERLAP */
-        html, body {
-            height: 100%;
-            width: 100%;
-            margin: 0;
-            padding: 0;
-            overflow: hidden; /* Screen එක එහා මෙහා හෙල්ලෙන්නේ නැති වෙන්න */
-            background: #0a0514;
-            color: white;
-            font-family: 'Segoe UI', sans-serif;
-        }
-
-        .app-container {
-            display: flex;
-            flex-direction: column;
-            height: 100vh; /* Device එකේ උසට සමානයි */
-            height: -webkit-fill-available; /* iOS Fix */
-            width: 100vw;
-        }
+        html, body { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background: #0a0514; color: white; font-family: 'Segoe UI', sans-serif; }
+        .app-container { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
 
         /* HEADER */
-        .chat-header {
-            height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 16px;
-            background: #0a0514;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            flex-shrink: 0; /* Header එක කුඩා වෙන්න දෙන්නේ නැහැ */
-        }
+        .chat-header { height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: #0a0514; border-bottom: 1px solid rgba(255, 255, 255, 0.05); flex-shrink: 0; }
 
-        /* MESSAGE AREA - මේක තමයි මැද කොටස */
-        #chat-messages {
-            flex-grow: 1; /* ඉතිරි ඉඩ සම්පූර්ණයෙන්ම ගනී */
-            overflow-y: auto;
-            padding: 20px 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            -webkit-overflow-scrolling: touch;
-        }
+        /* MESSAGE AREA */
+        #chat-messages { flex-grow: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 12px; -webkit-overflow-scrolling: touch; }
         #chat-messages::-webkit-scrollbar { width: 0; }
 
-        /* INPUT AREA FIX - කීබෝඩ් එකට යට වෙන්නේ නැති වෙන්න */
-        .input-wrapper {
-            padding: 12px 16px;
-            background: #0a0514;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            flex-shrink: 0; /* Input එක හැමවෙලේම පෙනෙන්න තියෙයි */
-            margin-bottom: env(safe-area-inset-bottom); /* iPhone notch fix */
-        }
+        /* INPUT AREA */
+        .input-wrapper { padding: 10px 16px 25px 16px; background: #0a0514; border-top: 1px solid rgba(255, 255, 255, 0.05); flex-shrink: 0; }
 
+        .glass-panel { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
         .btn-gradient { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
-        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .online-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; }
         .hidden { display: none !important; }
+        .recording { animation: pulse 1.5s infinite; background: #ef4444 !important; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
 <body>
 
     <div class="app-container">
-        
-        <div id="main-dashboard" class="flex-1 flex flex-col justify-center p-8">
-            <h1 class="text-5xl font-black italic mb-8 uppercase tracking-tighter text-pink-500">Not Alone.</h1>
-            <button onclick="startChatUI()" class="btn-gradient p-12 rounded-[2.5rem] font-black text-2xl uppercase shadow-2xl active:scale-95 transition-all">Find Stranger →</button>
+        <div id="login-screen" class="hidden flex-1 flex flex-col items-center justify-center p-6">
+            <h1 class="text-4xl font-black text-pink-500 mb-8 italic uppercase tracking-tighter">Not Alone</h1>
+            <div class="glass-panel p-8 rounded-[2.5rem] w-full max-w-xs text-center">
+                <div id="login-box">
+                    <input id="login-user" placeholder="Username / නම" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm border border-white/5">
+                    <input id="login-pass" type="password" placeholder="Password / මුරපදය" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm border border-white/5">
+                    <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-bold uppercase shadow-lg">Login / ඇතුල් වන්න</button>
+                    <p onclick="toggleReg(true)" class="text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold tracking-widest">New? Register / ලියාපදිංචි වන්න</p>
+                </div>
+                <div id="reg-box" class="hidden">
+                    <input id="reg-user" placeholder="New Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm border border-white/5">
+                    <input id="reg-pass" placeholder="New Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm border border-white/5">
+                    <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase shadow-lg">Register / ලියාපදිංචි වන්න</button>
+                    <p onclick="toggleReg(false)" class="text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold tracking-widest">Back / ආපසු</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="main-dashboard" class="hidden flex-1 flex flex-col items-center justify-center p-8">
+            <div class="w-full">
+                <div class="flex justify-between items-start mb-12">
+                    <h1 class="text-5xl font-black italic leading-none uppercase tracking-tighter text-pink-500">NOT ALONE.</h1>
+                    <div class="flex flex-col items-end gap-2">
+                        <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold">Logout / අයින් වන්න</button>
+                        <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
+                            <div class="online-dot animate-pulse"></div><span class="online-count text-[9px] text-emerald-400 font-bold uppercase">0 Online</span>
+                        </div>
+                    </div>
+                </div>
+                <p id="days-tag" class="text-[9px] bg-emerald-500/10 text-emerald-400 px-4 py-1 rounded-full inline-block mb-10 font-black uppercase tracking-widest border border-emerald-500/20">-- Days Remaining</p>
+                <button onclick="findStranger()" class="w-full btn-gradient p-14 rounded-[3rem] font-black text-2xl uppercase shadow-2xl active:scale-95 transition-all">Find Stranger →</button>
+            </div>
+        </div>
+
+        <div id="searching-ui" class="hidden flex-1 flex flex-col items-center justify-center text-center">
+            <div class="w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+            <p class="mt-4 font-bold animate-pulse text-xs uppercase tracking-widest text-pink-500">Searching... සොයමින්...</p>
+            <button onclick="location.reload()" class="mt-10 text-[10px] opacity-40 underline uppercase font-bold">Cancel / අවලංගු කරන්න</button>
         </div>
 
         <div id="chat-screen" class="hidden flex flex-col h-full">
             <div class="chat-header">
-                <span class="text-[10px] font-bold text-pink-500 uppercase tracking-widest">Stranger Chat</span>
-                <button onclick="location.reload()" class="bg-red-500/10 text-red-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase border border-red-500/20">End</button>
-            </div>
-
-            <div id="chat-messages">
-                <div class="flex justify-start">
-                    <div class="bg-white/10 p-3 rounded-2xl max-w-[85%] text-sm">Hi! How are you?</div>
+                <button onclick="logout()" class="text-[9px] text-white/40 uppercase font-bold">Logout</button>
+                <div class="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full">
+                    <div class="online-dot animate-pulse"></div><span class="online-count text-[8px] text-emerald-400 font-bold uppercase">0 Online</span>
                 </div>
+                <button onclick="endChat()" class="bg-red-500/10 text-red-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase border border-red-500/20">End / අවසන්</button>
             </div>
-
+            <div id="chat-messages"></div>
             <div class="input-wrapper">
                 <div class="flex gap-2 items-center bg-white/5 p-2 rounded-[2rem] border border-white/10 shadow-2xl">
-                    <button class="bg-white/10 w-11 h-11 rounded-full text-[8px] font-black uppercase flex-shrink-0">Voice</button>
-                    <input id="msg-input" placeholder="Message..." class="flex-1 bg-transparent p-2 outline-none text-sm text-white">
-                    <button class="btn-gradient w-11 h-11 rounded-full font-black text-[8px] flex-shrink-0">SEND</button>
+                    <button id="record-btn" onclick="toggleRecord()" class="bg-white/10 w-11 h-11 rounded-full text-[8px] font-black uppercase flex-shrink-0">Voice</button>
+                    <input id="msg-input" placeholder="Message... පණිවිඩය..." class="flex-1 bg-transparent p-2 outline-none text-sm">
+                    <button onclick="sendMsg()" class="btn-gradient w-11 h-11 rounded-full font-black text-[8px] flex-shrink-0">SEND</button>
                 </div>
             </div>
         </div>
 
+        <div id="admin-panel" class="hidden flex-1 flex flex-col p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="font-black text-blue-500 uppercase italic">Admin Panel</h2>
+                <button onclick="location.reload()" class="text-[9px] bg-white/10 px-3 py-1 rounded-full uppercase font-bold">Exit / ඉවත් වන්න</button>
+            </div>
+            <div id="user-list" class="flex-1 overflow-y-auto"></div>
+        </div>
     </div>
 
-    <script>
-        function startChatUI() {
-            document.getElementById('main-dashboard').classList.add('hidden');
-            document.getElementById('chat-screen').classList.remove('hidden');
-            
-            // Scroll messages to bottom on start
-            const msgBox = document.getElementById('chat-messages');
-            msgBox.scrollTop = msgBox.scrollHeight;
-        }
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, get, update, onDisconnect, remove, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-        // Keyboard පාවිච්චි කරන වෙලාවට Viewport එක හරිගස්සන්න
-        window.addEventListener('resize', () => {
-            if (document.activeElement.tagName === 'INPUT') {
-                window.setTimeout(() => {
-                    document.activeElement.scrollIntoView({ behavior: "smooth", block: "center" });
-                }, 100);
-            }
-        });
-    </script>
-</body>
-</html>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAtN7nwhc1XrYa8mGNLMQlKicFj-f5yG0k",
+            authDomain: "notalonewithgemini.firebaseapp.com",
+            projectId: "notalonewithgemini",
+            databaseURL: "https://notalonewithgemini-default-rtdb.firebaseio.com",
+            appId: "1:541160542822:web:12570e417ed92c3f"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        
+        const ADMIN_USER = "admin";
+        const ADMIN_PW = "913132386V";
+        const MY_WHATSAPP = "94773364401";
+        const msgSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3');
+
+        let myUser = localStorage.getItem('chatUser');
+        let currentRoom = null;
+        let media
