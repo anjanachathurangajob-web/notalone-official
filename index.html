@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Not Alone - Ultimate Stable</title>
+    <title>Not Alone - Voice Only</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background: #0a0514; color: white; overflow: hidden; }
         .glass-panel { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .btn-gradient { background: linear-gradient(90deg, #8b5cf6, #ec4899); transition: all 0.3s; }
+        .btn-gradient { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
         .chat-bubble-me { background: #8b5cf6; border-radius: 18px 18px 4px 18px; }
         .chat-bubble-peer { background: #2d2d3d; border-radius: 18px 18px 18px 4px; }
         .msg-animate { animation: fadeIn 0.3s ease-out; }
@@ -33,7 +33,6 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-        
         const CLOUD_NAME = "dgxpyzt7c"; //
         const UPLOAD_PRESET = "notalone_preset";
 
@@ -42,32 +41,22 @@
         let mediaRecorder;
         let audioChunks = [];
 
-        // --- AUTH & NAV ---
         window.logout = async () => {
             if(myUser) await update(ref(db, `users/${myUser}`), { currentChat: null, chattingWith: null });
             localStorage.removeItem('chatUser');
             location.reload();
         };
 
-        // --- MEDIA LOGIC (Cloudinary) ---
-        window.uploadMedia = async (file, type) => {
-            if(!file || !currentChatId) return;
+        // --- VOICE LOGIC ---
+        window.uploadVoice = async (blob) => {
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', blob);
             formData.append('upload_preset', UPLOAD_PRESET);
             try {
                 const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, { method: 'POST', body: formData });
                 const data = await res.json();
-                push(ref(db, `messages/${currentChatId}`), { u: myUser, t: data.secure_url, type: type, ts: Date.now() });
-            } catch (e) { alert("Upload failed!"); }
-        };
-
-        window.triggerFile = (type) => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = type === 'image' ? 'image/*' : 'video/*';
-            input.onchange = (e) => uploadMedia(e.target.files[0], type);
-            input.click();
+                push(ref(db, `messages/${currentChatId}`), { u: myUser, t: data.secure_url, type: 'audio', ts: Date.now() });
+            } catch (e) { alert("Voice upload failed!"); }
         };
 
         window.toggleRecord = async () => {
@@ -76,7 +65,7 @@
                 mediaRecorder = new MediaRecorder(stream);
                 audioChunks = [];
                 mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                mediaRecorder.onstop = () => uploadMedia(new Blob(audioChunks, { type: 'audio/webm' }), 'audio');
+                mediaRecorder.onstop = () => uploadVoice(new Blob(audioChunks, { type: 'audio/webm' }));
                 mediaRecorder.start();
                 document.getElementById('mic-btn').classList.add('text-red-500', 'animate-pulse');
             } else {
@@ -98,15 +87,14 @@
                 if(s.exists()){
                     const now = Date.now();
                     Object.entries(s.val()).forEach(([key, m]) => {
-                        // Text delete after 3 days (259200000ms)
+                        // Text delete after 3 days
                         if(m.type === 'text' && (now - m.ts > 259200000)) { remove(ref(db, `messages/${chatId}/${key}`)); return; }
 
                         const isMe = m.u === myUser;
                         let content = `<p class="text-sm">${m.t}</p>`;
-                        
-                        if(m.type === 'image') content = `<img src="${m.t}" class="rounded-lg blur-md hover:blur-none cursor-pointer" onclick="window.open('${m.t}'); remove(ref(db,'messages/${chatId}/${key}'))">`;
-                        else if(m.type === 'audio') content = `<audio src="${m.t}" controls class="h-8" onended="remove(ref(db,'messages/${chatId}/${key}'))"></audio>`;
-                        else if(m.type === 'video') content = `<video src="${m.t}" controls class="rounded-lg" onended="remove(ref(db,'messages/${chatId}/${key}'))"></video>`;
+                        if(m.type === 'audio') {
+                            content = `<audio src="${m.t}" controls class="h-8" onended="remove(ref(db,'messages/${chatId}/${key}'))"></audio>`;
+                        }
 
                         b.innerHTML += `<div class="flex ${isMe?'justify-end':'justify-start'} mb-4 msg-animate">
                             <div class="${isMe?'chat-bubble-me':'chat-bubble-peer'} px-4 py-2 max-w-[85%] shadow-xl">${content}</div>
@@ -118,17 +106,14 @@
         }
 
         window.startChatting = async () => {
-            // පරණ චැට් ID සම්පූර්ණයෙන් ක්ලියර් කිරීම
             await update(ref(db, `users/${myUser}`), { currentChat: null, chattingWith: null });
-            
             document.getElementById('main-dashboard').classList.add('hidden');
             document.getElementById('loading-screen').classList.remove('hidden');
-
             const qSnap = await get(ref(db, 'queue'));
             if(qSnap.exists()){
                 const peer = Object.keys(qSnap.val()).find(u => u !== myUser);
                 if(peer){
-                    const cid = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+                    const cid = `chat_${Date.now()}`;
                     await update(ref(db, `users/${peer}`), { currentChat: cid, chattingWith: myUser });
                     await update(ref(db, `users/${myUser}`), { currentChat: cid, chattingWith: peer });
                     await remove(ref(db, `queue/${peer}`));
@@ -152,14 +137,13 @@
             const p = document.getElementById('password').value.trim();
             const s = await get(ref(db, `users/${u}`));
             if(s.exists() && s.val().password === p) { localStorage.setItem('chatUser', u); location.reload(); }
-            else alert("Invalid Credentials");
+            else alert("Invalid Login");
         };
 
         window.onload = () => {
             if(!myUser) document.getElementById('login-screen').classList.remove('hidden');
             else {
                 document.getElementById('main-dashboard').classList.remove('hidden');
-                document.getElementById('user-tag').innerText = myUser;
                 onValue(ref(db, `users/${myUser}`), (s) => {
                     if(s.val()?.currentChat) openChatUI(s.val().currentChat, s.val().chattingWith);
                 });
@@ -168,21 +152,20 @@
     </script>
 
     <div id="login-screen" class="screen hidden flex-1 flex flex-col justify-center max-w-sm mx-auto">
-        <h1 class="text-4xl font-black italic text-blue-500 mb-8 text-center uppercase tracking-tighter">Not Alone</h1>
+        <h1 class="text-4xl font-black italic text-blue-500 mb-8 text-center uppercase">Not Alone</h1>
         <div class="glass-panel p-8 rounded-[2.5rem]">
-            <input id="username" placeholder="Username" class="w-full bg-white/5 p-4 rounded-2xl mb-4 outline-none border border-white/5">
-            <input id="password" type="password" placeholder="Password" class="w-full bg-white/5 p-4 rounded-2xl mb-6 outline-none border border-white/5">
-            <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-black uppercase">Login</button>
+            <input id="username" placeholder="Username" class="w-full bg-white/5 p-4 rounded-2xl mb-4 outline-none">
+            <input id="password" type="password" placeholder="Password" class="w-full bg-white/5 p-4 rounded-2xl mb-6 outline-none">
+            <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-black">LOGIN</button>
         </div>
     </div>
 
     <div id="main-dashboard" class="screen hidden flex-1 flex flex-col justify-center">
         <div class="flex justify-between items-start mb-12">
-            <h1 class="text-6xl font-black italic uppercase leading-[0.85]">Connect<br><span class="text-pink-500">Fast.</span></h1>
-            <button onclick="logout()" class="text-[10px] border border-white/20 px-4 py-2 rounded-full uppercase font-bold">Logout</button>
+            <h1 class="text-6xl font-black italic uppercase leading-[0.85]">Voice<br><span class="text-pink-500">Only.</span></h1>
+            <button onclick="logout()" class="text-[10px] border border-white/20 px-4 py-2 rounded-full font-bold">LOGOUT</button>
         </div>
-        <p class="text-[10px] opacity-40 mb-4 uppercase tracking-widest">Logged in as: <span id="user-tag" class="text-blue-400"></span></p>
-        <button onclick="startChatting()" class="w-full btn-gradient p-10 rounded-[2.5rem] font-black text-2xl shadow-2xl uppercase">Find Someone →</button>
+        <button onclick="startChatting()" class="w-full btn-gradient p-10 rounded-[2.5rem] font-black text-2xl shadow-2xl uppercase">Find Stranger →</button>
     </div>
 
     <div id="chat-screen" class="screen hidden fixed inset-0 bg-[#0a0514] p-6 flex flex-col z-50">
@@ -190,27 +173,24 @@
             <h2 class="text-xl font-black italic text-blue-500 uppercase">Not Alone</h2>
             <div class="flex items-center gap-3">
                 <span id="peer-name" class="text-[10px] font-bold text-purple-400 uppercase"></span>
-                <button onclick="logout()" class="text-[9px] bg-red-500/20 text-red-500 px-3 py-1 rounded-full uppercase font-bold">Exit Chat</button>
+                <button onclick="logout()" class="text-[9px] bg-red-500/20 text-red-500 px-3 py-1 rounded-full uppercase font-bold">Exit</button>
             </div>
         </div>
-        <div id="messages" class="flex-1 overflow-y-auto mb-6 space-y-2"></div>
+        <div id="messages" class="flex-1 overflow-y-auto mb-6"></div>
         <div class="glass-panel p-2 rounded-[2.5rem] shadow-2xl">
-            <div class="flex justify-around py-3 border-b border-white/5 mb-1">
-                <button onclick="triggerFile('image')" class="text-xl">🖼️</button>
-                <button onclick="triggerFile('video')" class="text-xl">🎥</button>
-                <button id="mic-btn" onclick="toggleRecord()" class="text-xl">🎙️</button>
+            <div class="flex justify-center py-3 border-b border-white/5 mb-1">
+                <button id="mic-btn" onclick="toggleRecord()" class="text-3xl p-4 bg-white/5 rounded-full">🎙️</button>
             </div>
             <div class="flex gap-2 p-1">
-                <input id="msg-input" placeholder="Type a message..." class="flex-1 bg-transparent p-4 outline-none text-sm" onkeypress="if(event.key==='Enter') sendMsg()">
+                <input id="msg-input" placeholder="Type..." class="flex-1 bg-transparent p-4 outline-none text-sm" onkeypress="if(event.key==='Enter') sendMsg()">
                 <button onclick="sendMsg()" class="btn-gradient px-8 rounded-2xl font-black text-xs uppercase">Send</button>
             </div>
         </div>
     </div>
 
-    <div id="loading-screen" class="screen hidden flex-1 flex flex-col items-center justify-center text-center">
-        <div class="w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-6 shadow-[0_0_30px_rgba(236,72,153,0.3)]"></div>
-        <p class="text-xs uppercase tracking-[0.2em] opacity-50 animate-pulse">Searching for a stranger...</p>
-        <button onclick="location.reload()" class="mt-12 text-[10px] opacity-30 underline uppercase">Cancel Search</button>
+    <div id="loading-screen" class="screen hidden flex-1 flex flex-col items-center justify-center">
+        <div class="w-14 h-14 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p class="text-xs uppercase opacity-50">Finding a voice...</p>
     </div>
 
 </body>
