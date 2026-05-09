@@ -33,47 +33,66 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* CRITICAL: Fixes the 'Same look for everyone' issue */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             background: #0a0514; 
             color: white; 
             overflow: hidden; 
             height: 100vh; 
+            width: 100vw;
             display: flex; 
             flex-direction: column; 
-            margin: 0;
         }
 
         .glass-panel { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
         .btn-gradient { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
         .online-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; }
 
-        /* SCROLL & OVERLAP FIXES */
+        /* HEADER FIX */
+        .chat-header {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            background: #0a0514;
+        }
+
+        /* MESSAGE AREA FIX - No more overlapping */
         #chat-messages {
-            flex: 1;
+            flex: 1; 
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            padding: 15px 0;
+            padding: 15px 16px;
             display: flex;
             flex-direction: column;
+            gap: 8px;
         }
         #chat-messages::-webkit-scrollbar { width: 0; }
 
+        /* INPUT AREA FIX - Sticky Bottom */
         .input-wrapper {
             background: #0a0514;
-            padding: 10px 16px 30px 16px;
+            padding: 10px 16px 25px 16px; /* Extra bottom padding for modern phones */
             border-top: 1px solid rgba(255, 255, 255, 0.05);
-            width: 100%;
         }
 
         .recording { animation: pulse 1.5s infinite; background: #ef4444 !important; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         
+        /* SCREEN WRAPPERS */
         #chat-screen, #main-dashboard, #login-screen, #admin-panel, #searching-ui {
             height: 100vh;
             width: 100%;
             display: flex;
             flex-direction: column;
+            position: absolute;
+            top: 0;
+            left: 0;
         }
         .hidden { display: none !important; }
     </style>
@@ -200,11 +219,11 @@
                     messages.forEach(m => {
                         const isMe = m.sender === myUser;
                         let content = m.type === 'text' ? m.text : `<audio controls class="h-8 w-40"><source src="${m.audio}" type="audio/webm"></audio>`;
-                        msgBox.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-2 px-4">
+                        msgBox.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} w-full">
                             <div class="${isMe ? 'bg-pink-600' : 'bg-white/10'} p-3 rounded-2xl max-w-[85%] text-sm shadow-sm">${content}</div>
                         </div>`;
                     });
-                    setTimeout(() => { msgBox.scrollTop = msgBox.scrollHeight; }, 150);
+                    setTimeout(() => { msgBox.scrollTop = msgBox.scrollHeight; }, 100);
                 }
             });
 
@@ -242,7 +261,7 @@
                     };
                     mediaRecorder.start();
                     btn.classList.add('recording'); btn.innerText = "REC";
-                } catch(e) { alert("Mic error!"); }
+                } catch(e) { alert("Mic access denied! / මයික්‍රොෆෝනයට අවසර දෙන්න."); }
             } else { mediaRecorder.stop(); btn.classList.remove('recording'); btn.innerText = "VOICE"; }
         };
 
@@ -274,8 +293,8 @@
                     list.innerHTML += `<div class="p-4 rounded-xl mb-3 flex justify-between items-center ${isApproved ? 'bg-emerald-500/20 border border-emerald-500/30' : 'glass-panel mx-4'}">
                         <div><p class="font-bold text-sm ${isApproved ? 'text-emerald-400' : 'text-white'}">${u}</p></div>
                         <div class="flex gap-2">
-                            <button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-1 rounded-lg text-[9px] font-bold">Approve</button>
-                            <button onclick="deleteUser('${u}')" class="bg-red-600 px-3 py-1 rounded-lg text-[9px] font-bold">Del</button>
+                            <button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-1 rounded-lg text-[9px] font-bold uppercase">Approve</button>
+                            <button onclick="deleteUser('${u}')" class="bg-red-600 px-3 py-1 rounded-lg text-[9px] font-bold uppercase">Del</button>
                         </div>
                     </div>`;
                 });
@@ -296,8 +315,8 @@
         };
     </script>
 
-    <div id="searching-ui" class="hidden justify-center items-center text-center p-6">
-        <div>
+    <div id="searching-ui" class="hidden glass-panel">
+        <div class="m-auto text-center">
             <div class="w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
             <p class="mt-4 font-bold animate-pulse text-xs uppercase tracking-widest text-pink-500">Searching... සොයමින්...</p>
             <button onclick="location.reload()" class="mt-10 text-[10px] opacity-40 underline uppercase font-bold">Cancel / අවලංගු කරන්න</button>
@@ -305,11 +324,16 @@
     </div>
 
     <div id="chat-screen" class="hidden">
-        <div class="flex justify-between items-center p-4 border-b border-white/10 bg-[#0a0514]">
+        <div class="chat-header">
             <button onclick="logout()" class="text-[9px] text-white/40 uppercase font-bold">Logout / ඉවත් වන්න</button>
-            <button onclick="endChat()" class="bg-red-500/10 text-red-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase border border-red-500/20">End Chat / අවසන් කරන්න</button>
+            <div class="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full">
+                <div class="online-dot animate-pulse"></div><span class="online-count text-[8px] text-emerald-400 font-bold">0 Online</span>
+            </div>
+            <button onclick="endChat()" class="bg-red-500/10 text-red-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase border border-red-500/20">End / අවසන්</button>
         </div>
+        
         <div id="chat-messages"></div>
+        
         <div class="input-wrapper">
             <div class="flex gap-2 items-center bg-white/5 p-2 rounded-[2rem] border border-white/10 shadow-2xl">
                 <button id="record-btn" onclick="toggleRecord()" class="bg-white/10 w-11 h-11 rounded-full text-[8px] font-black uppercase flex-shrink-0">Voice</button>
@@ -319,7 +343,7 @@
         </div>
     </div>
 
-    <div id="login-screen" class="hidden justify-center items-center p-6">
+    <div id="login-screen" class="hidden items-center justify-center p-6">
         <div class="w-full max-w-xs">
             <h1 class="text-center text-4xl font-black text-pink-500 mb-8 italic uppercase tracking-tighter">Not Alone</h1>
             <div class="glass-panel p-8 rounded-[2.5rem]">
@@ -327,26 +351,24 @@
                     <input id="login-user" placeholder="Username / නම" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm border border-white/5">
                     <input id="login-pass" type="password" placeholder="Password / මුරපදය" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm border border-white/5">
                     <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-bold uppercase shadow-lg">Login / ඇතුල් වන්න</button>
-                    <p onclick="document.getElementById('login-box').classList.add('hidden'); document.getElementById('reg-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold tracking-widest">New Account? / ලියාපදිංචි වන්න</p>
+                    <p onclick="document.getElementById('login-box').classList.add('hidden'); document.getElementById('reg-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">New Account? / ලියාපදිංචි වන්න</p>
                 </div>
                 <div id="reg-box" class="hidden">
                     <input id="reg-user" placeholder="New Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm border border-white/5">
                     <input id="reg-pass" placeholder="New Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm border border-white/5">
-                    <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase shadow-lg">Register / ලියාපදිංචි වන්න</button>
-                    <p onclick="document.getElementById('reg-box').classList.add('hidden'); document.getElementById('login-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold tracking-widest">Back / ආපසු</p>
+                    <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase">Register / ලියාපදිංචි වන්න</button>
+                    <p onclick="document.getElementById('reg-box').classList.add('hidden'); document.getElementById('login-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">Back / ආපසු</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="main-dashboard" class="hidden justify-center items-center p-8">
+    <div id="main-dashboard" class="hidden items-center justify-center p-8">
         <div class="w-full">
             <div class="flex justify-between items-start mb-12">
                 <h1 class="text-5xl font-black italic leading-none uppercase tracking-tighter">NOT<br><span class="text-pink-500">ALONE.</span></h1>
-                <div class="flex flex-col items-end gap-2">
-                    <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
-                        <div class="online-dot animate-pulse"></div><span class="online-count text-[9px] text-emerald-400 font-bold uppercase">0 Online</span>
-                    </div>
+                <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
+                    <div class="online-dot animate-pulse"></div><span class="online-count text-[9px] text-emerald-400 font-bold uppercase">0 Online</span>
                 </div>
             </div>
             <p id="days-tag" class="text-[9px] bg-emerald-500/10 text-emerald-400 px-4 py-1 rounded-full inline-block mb-10 font-black uppercase tracking-widest border border-emerald-500/20">-- Days Remaining</p>
@@ -355,12 +377,12 @@
         </div>
     </div>
 
-    <div id="admin-panel" class="hidden p-6 overflow-y-auto">
+    <div id="admin-panel" class="hidden p-6">
         <div class="flex justify-between items-center mb-6">
             <h2 class="font-black text-blue-500 uppercase italic">Admin Panel</h2>
             <button onclick="location.reload()" class="text-[9px] bg-white/10 px-3 py-1 rounded-full uppercase font-bold">Exit</button>
         </div>
-        <div id="user-list"></div>
+        <div id="user-list" class="flex-1 overflow-y-auto"></div>
     </div>
 
 </body>
