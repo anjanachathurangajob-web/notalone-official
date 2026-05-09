@@ -21,7 +21,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, get, update, onDisconnect, remove, push, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, get, update, onDisconnect, remove, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAtN7nwhc1XrYa8mGNLMQlKicFj-f5yG0k",
@@ -38,7 +38,6 @@
         const ADMIN_PW = "913132386V";
         const MY_WHATSAPP = "94773364401";
         
-        // Message Sound Effect
         const msgSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3');
 
         let myUser = localStorage.getItem('chatUser');
@@ -133,8 +132,6 @@
                 msgBox.innerHTML = "";
                 if(s.exists()) {
                     const messages = Object.values(s.val());
-                    
-                    // Sound logic: if new message from partner arrives
                     if(messages.length > lastMsgCount) {
                         const lastMsg = messages[messages.length - 1];
                         if(lastMsg.sender !== myUser) {
@@ -142,7 +139,6 @@
                         }
                     }
                     lastMsgCount = messages.length;
-
                     messages.forEach(m => {
                         const isMe = m.sender === myUser;
                         let content = m.type === 'text' ? m.text : `<audio controls class="h-8 w-40"><source src="${m.audio}" type="audio/webm"></audio>`;
@@ -249,14 +245,14 @@
 
     <div id="chat-screen" class="hidden flex-1 flex flex-col chat-container">
         <div class="flex justify-between items-center pb-3 border-b border-white/10">
-            <button onclick="logout()" class="text-[9px] text-white/40 uppercase font-bold">Logout</button>
-            <button onclick="endChat()" class="bg-red-500/10 text-red-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase border border-red-500/20">End Chat</button>
+            <button onclick="logout()" class="text-[9px] text-white/40 uppercase font-bold">Logout / අයින් වෙන්න</button>
+            <button onclick="endChat()" class="bg-red-500/10 text-red-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase border border-red-500/20">End Chat / අවසන් කරන්න</button>
         </div>
         <div id="chat-messages" class="flex-1 overflow-y-auto py-4 px-2"></div>
         <div class="chat-input-area">
             <div class="flex gap-2 items-center bg-[#1a1425] p-2 rounded-[2rem] border border-white/10 shadow-2xl">
                 <button id="record-btn" onclick="toggleRecord()" class="bg-white/10 w-12 h-12 rounded-full text-[8px] font-black uppercase">Voice</button>
-                <input id="msg-input" placeholder="Message..." class="flex-1 bg-transparent p-2 outline-none text-sm">
+                <input id="msg-input" placeholder="Message... පණිවිඩයක්..." class="flex-1 bg-transparent p-2 outline-none text-sm">
                 <button onclick="sendMsg()" class="btn-gradient w-12 h-12 rounded-full font-black text-[8px]">SEND</button>
             </div>
         </div>
@@ -266,16 +262,16 @@
         <h1 class="text-center text-4xl font-black text-pink-500 mb-8 italic uppercase">Not Alone</h1>
         <div class="glass-panel p-8 rounded-[2.5rem]">
             <div id="login-box">
-                <input id="login-user" placeholder="Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm border border-white/5">
-                <input id="login-pass" type="password" placeholder="Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm border border-white/5">
-                <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-bold uppercase shadow-lg">Login</button>
-                <p onclick="document.getElementById('login-box').classList.add('hidden'); document.getElementById('reg-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">New? Register Here</p>
+                <input id="login-user" placeholder="Username (පරිශීලක නාමය)" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm border border-white/5">
+                <input id="login-pass" type="password" placeholder="Password (මුරපදය)" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm border border-white/5">
+                <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-bold uppercase shadow-lg">Login / ඇතුල් වන්න</button>
+                <p onclick="document.getElementById('login-box').classList.add('hidden'); document.getElementById('reg-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">New? Register Here / ලියාපදිංචි වන්න</p>
             </div>
             <div id="reg-box" class="hidden">
                 <input id="reg-user" placeholder="New Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm">
                 <input id="reg-pass" placeholder="New Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm">
-                <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase">Register</button>
-                <p onclick="document.getElementById('reg-box').classList.add('hidden'); document.getElementById('login-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">Back to Login</p>
+                <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase">Register / ලියාපදිංචි වන්න</button>
+                <p onclick="document.getElementById('reg-box').classList.add('hidden'); document.getElementById('login-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">Back to Login / ආපසු</p>
             </div>
         </div>
     </div>
@@ -284,7 +280,7 @@
         <div class="flex justify-between items-start mb-8">
             <h1 class="text-5xl font-black italic leading-none uppercase tracking-tighter">NOT<br><span class="text-pink-500">ALONE.</span></h1>
             <div class="flex flex-col items-end gap-2">
-                <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold">Logout</button>
+                <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold">Logout / අයින් වෙන්න</button>
                 <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
                     <div class="online-dot animate-pulse"></div><span class="online-count text-[9px] text-emerald-400 font-bold uppercase">0 Online</span>
                 </div>
