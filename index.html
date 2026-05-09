@@ -21,7 +21,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, get, update, onDisconnect, remove, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, get, update, onDisconnect, remove, push, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAtN7nwhc1XrYa8mGNLMQlKicFj-f5yG0k",
@@ -46,7 +46,7 @@
         window.logout = () => { localStorage.clear(); location.reload(); };
 
         if(myUser) {
-            set(ref(db, `online/${myUser}`), { status: "idle" });
+            set(ref(db, `online/${myUser}`), { status: "idle", lastSeen: Date.now() });
             onDisconnect(ref(db, `online/${myUser}`)).remove();
         }
 
@@ -55,6 +55,7 @@
             document.querySelectorAll('.online-count').forEach(el => el.innerText = `${count} Online`);
         });
 
+        // --- AUTH ---
         window.handleLogin = async () => {
             const u = document.getElementById('login-user').value.trim();
             const p = document.getElementById('login-pass').value.trim();
@@ -83,25 +84,35 @@
             location.reload();
         };
 
+        // --- QUICK MATCHING LOGIC ---
         window.findStranger = async () => {
             document.getElementById('main-dashboard').classList.add('hidden');
-            document.getElementById('chat-screen').classList.add('hidden'); // Ensure chat is hidden when searching
+            document.getElementById('chat-screen').classList.add('hidden');
             document.getElementById('searching-ui').classList.remove('hidden');
-            await update(ref(db, `online/${myUser}`), { status: "searching" });
 
-            const unsub = onValue(ref(db, 'online'), async (snapshot) => {
-                const users = snapshot.val();
-                let partner = Object.keys(users || {}).find(u => u !== myUser && users[u].status === "searching");
-                if (partner) {
-                    const roomId = [myUser, partner].sort().join("_");
-                    await set(ref(db, `rooms/${roomId}`), { users: [myUser, partner], activeUsers: [myUser, partner] });
-                    await update(ref(ref(db, `online/${myUser}`)), { status: "chatting", room: roomId });
-                    await update(ref(ref(db, `online/${partner}`)), { status: "chatting", room: roomId });
-                    unsub(); // Stop listening once matched
-                }
-            });
+            // Quick scan for available partners before setting status
+            const onlineSnapshot = await get(ref(db, 'online'));
+            const users = onlineSnapshot.val() || {};
+            let partner = Object.keys(users).find(u => u !== myUser && users[u].status === "searching");
 
-            onValue(ref(db, `online/${myUser}/room`), (s) => { if(s.exists() && s.val()) startChat(s.val()); });
+            if (partner) {
+                const roomId = [myUser, partner].sort().join("_");
+                // Use update for atomic speed
+                const updates = {};
+                updates[`rooms/${roomId}`] = { users: [myUser, partner], activeUsers: [myUser, partner], createdAt: Date.now() };
+                updates[`online/${myUser}`] = { status: "chatting", room: roomId };
+                updates[`online/${partner}`] = { status: "chatting", room: roomId };
+                await update(ref(db), updates);
+            } else {
+                await update(ref(db, `online/${myUser}`), { status: "searching" });
+                // Fallback listener if no immediate partner found
+                const unsub = onValue(ref(db, `online/${myUser}/room`), (s) => {
+                    if(s.exists() && s.val()) {
+                        startChat(s.val());
+                        unsub();
+                    }
+                });
+            }
         };
 
         function startChat(roomId) {
@@ -137,7 +148,6 @@
                                 <button onclick="findStranger()" class="btn-gradient px-6 py-2 rounded-full text-[10px] font-black uppercase shadow-lg">New Chat / නව චැට් එකක්</button>
                             </div>`;
                         msgBox.scrollTop = msgBox.scrollHeight;
-                        // Stop listening to this room's messages
                         currentRoom = null;
                     }
                 }
@@ -215,7 +225,7 @@
     <div id="searching-ui" class="hidden flex-1 flex flex-col justify-center items-center text-center">
         <div class="w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
         <p class="mt-4 font-bold animate-pulse text-xs uppercase tracking-widest">Stranger කෙනෙක් සොයමින්...<br>Finding Stranger...</p>
-        <button onclick="location.reload()" class="mt-10 text-[10px] opacity-40 underline uppercase">Cancel / අවලංගු කරන්න</button>
+        <button onclick="location.reload()" class="mt-10 text-[10px] opacity-40 underline uppercase font-bold">Cancel / අවලංගු කරන්න</button>
     </div>
 
     <div id="chat-screen" class="hidden flex-1 flex flex-col chat-container">
