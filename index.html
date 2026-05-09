@@ -46,7 +46,7 @@
         window.logout = () => { localStorage.clear(); location.reload(); };
 
         if(myUser) {
-            set(ref(db, `online/${myUser}`), { status: "idle", lastSeen: Date.now() });
+            set(ref(db, `online/${myUser}`), { status: "idle" });
             onDisconnect(ref(db, `online/${myUser}`)).remove();
         }
 
@@ -84,41 +84,48 @@
             location.reload();
         };
 
-        // --- QUICK MATCHING LOGIC ---
+        // --- STABLE QUICK MATCHING ---
         window.findStranger = async () => {
             document.getElementById('main-dashboard').classList.add('hidden');
             document.getElementById('chat-screen').classList.add('hidden');
             document.getElementById('searching-ui').classList.remove('hidden');
 
-            // Quick scan for available partners before setting status
-            const onlineSnapshot = await get(ref(db, 'online'));
-            const users = onlineSnapshot.val() || {};
-            let partner = Object.keys(users).find(u => u !== myUser && users[u].status === "searching");
+            await update(ref(db, `online/${myUser}`), { status: "searching", room: null });
 
-            if (partner) {
-                const roomId = [myUser, partner].sort().join("_");
-                // Use update for atomic speed
-                const updates = {};
-                updates[`rooms/${roomId}`] = { users: [myUser, partner], activeUsers: [myUser, partner], createdAt: Date.now() };
-                updates[`online/${myUser}`] = { status: "chatting", room: roomId };
-                updates[`online/${partner}`] = { status: "chatting", room: roomId };
-                await update(ref(db), updates);
-            } else {
-                await update(ref(db, `online/${myUser}`), { status: "searching" });
-                // Fallback listener if no immediate partner found
-                const unsub = onValue(ref(db, `online/${myUser}/room`), (s) => {
-                    if(s.exists() && s.val()) {
-                        startChat(s.val());
-                        unsub();
+            const unsubOnline = onValue(ref(db, 'online'), async (snapshot) => {
+                const users = snapshot.val() || {};
+                let partner = Object.keys(users).find(u => u !== myUser && users[u].status === "searching");
+
+                if (partner) {
+                    const roomId = [myUser, partner].sort().join("_");
+                    const roomRef = ref(db, `rooms/${roomId}`);
+                    
+                    const result = await runTransaction(roomRef, (currentData) => {
+                        if (currentData === null) {
+                            return { users: [myUser, partner], activeUsers: [myUser, partner], createdAt: Date.now() };
+                        }
+                        return; 
+                    });
+
+                    if (result.committed) {
+                        await update(ref(db, `online/${myUser}`), { status: "chatting", room: roomId });
+                        await update(ref(db, `online/${partner}`), { status: "chatting", room: roomId });
+                        unsubOnline();
                     }
-                });
-            }
+                }
+            });
+
+            const unsubRoom = onValue(ref(db, `online/${myUser}/room`), (s) => {
+                if(s.exists() && s.val()) {
+                    startChat(s.val());
+                    unsubRoom();
+                }
+            });
         };
 
         function startChat(roomId) {
             currentRoom = roomId;
             document.getElementById('searching-ui').classList.add('hidden');
-            document.getElementById('main-dashboard').classList.add('hidden');
             document.getElementById('chat-screen').classList.remove('hidden');
             
             onValue(ref(db, `rooms/${roomId}/messages`), (s) => {
@@ -139,16 +146,17 @@
             onValue(ref(db, `rooms/${roomId}/activeUsers`), (s) => {
                 if(s.exists()) {
                     const active = s.val();
-                    if(!active.includes(myUser)) { location.reload(); } 
-                    else if (active.length < 2) {
+                    if (active.length < 2 && active.includes(myUser)) {
                         const msgBox = document.getElementById('chat-messages');
-                        msgBox.innerHTML += `
-                            <div class="text-center my-6">
-                                <p class="text-red-400 text-[10px] uppercase font-bold mb-3 tracking-widest opacity-60">Partner has left the chat</p>
-                                <button onclick="findStranger()" class="btn-gradient px-6 py-2 rounded-full text-[10px] font-black uppercase shadow-lg">New Chat / නව චැට් එකක්</button>
-                            </div>`;
-                        msgBox.scrollTop = msgBox.scrollHeight;
-                        currentRoom = null;
+                        if (!document.getElementById('left-msg')) {
+                            msgBox.innerHTML += `
+                                <div id="left-msg" class="text-center my-6">
+                                    <p class="text-red-400 text-[10px] uppercase font-bold mb-3 tracking-widest opacity-60">Partner has left the chat</p>
+                                    <button onclick="findStranger()" class="btn-gradient px-6 py-2 rounded-full text-[10px] font-black uppercase shadow-lg">New Chat / නව චැට් එකක්</button>
+                                </div>`;
+                            msgBox.scrollTop = msgBox.scrollHeight;
+                            currentRoom = null;
+                        }
                     }
                 }
             });
@@ -237,7 +245,7 @@
         <div class="chat-input-area">
             <div class="flex gap-2 items-center bg-[#1a1425] p-2 rounded-[2rem] border border-white/10 shadow-2xl">
                 <button id="record-btn" onclick="toggleRecord()" class="bg-white/10 w-12 h-12 rounded-full text-[8px] font-black uppercase">Voice</button>
-                <input id="msg-input" placeholder="Message... පණිවිඩයක්..." class="flex-1 bg-transparent p-2 outline-none text-sm">
+                <input id="msg-input" placeholder="Message..." class="flex-1 bg-transparent p-2 outline-none text-sm">
                 <button onclick="sendMsg()" class="btn-gradient w-12 h-12 rounded-full font-black text-[8px]">SEND</button>
             </div>
         </div>
@@ -247,16 +255,16 @@
         <h1 class="text-center text-4xl font-black text-pink-500 mb-8 italic uppercase">Not Alone</h1>
         <div class="glass-panel p-8 rounded-[2.5rem]">
             <div id="login-box">
-                <input id="login-user" placeholder="Username (පරිශීලක නාමය)" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm border border-white/5">
-                <input id="login-pass" type="password" placeholder="Password (මුරපදය)" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm border border-white/5">
+                <input id="login-user" placeholder="Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm border border-white/5">
+                <input id="login-pass" type="password" placeholder="Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm border border-white/5">
                 <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-bold uppercase shadow-lg">Login / ඇතුල් වන්න</button>
-                <p onclick="document.getElementById('login-box').classList.add('hidden'); document.getElementById('reg-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">New? Register Here / ලියාපදිංචි වන්න</p>
+                <p onclick="document.getElementById('login-box').classList.add('hidden'); document.getElementById('reg-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">New? Register Here</p>
             </div>
             <div id="reg-box" class="hidden">
                 <input id="reg-user" placeholder="New Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm">
                 <input id="reg-pass" placeholder="New Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm">
                 <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase">Register / ලියාපදිංචි වන්න</button>
-                <p onclick="document.getElementById('reg-box').classList.add('hidden'); document.getElementById('login-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">Back to Login / ආපසු</p>
+                <p onclick="document.getElementById('reg-box').classList.add('hidden'); document.getElementById('login-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">Back to Login</p>
             </div>
         </div>
     </div>
@@ -265,7 +273,7 @@
         <div class="flex justify-between items-start mb-8">
             <h1 class="text-5xl font-black italic leading-none uppercase tracking-tighter">NOT<br><span class="text-pink-500">ALONE.</span></h1>
             <div class="flex flex-col items-end gap-2">
-                <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold">Logout / අයින් වෙන්න</button>
+                <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold">Logout</button>
                 <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
                     <div class="online-dot animate-pulse"></div><span class="online-count text-[9px] text-emerald-400 font-bold uppercase">0 Online</span>
                 </div>
