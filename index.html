@@ -54,7 +54,6 @@
             
             if(!u || !p) return alert("Please fill all fields!");
 
-            // Check if Username Already Exists
             const checkUser = await get(ref(db, `users/${u}`));
             if(checkUser.exists()) {
                 return alert("Username already used. Please use another one!");
@@ -103,6 +102,7 @@
                 approved: true, 
                 expiry: Date.now() + thirtyDays 
             });
+            alert(u + " approved for 30 days!");
         };
 
         // Admin: Delete
@@ -112,7 +112,7 @@
             }
         };
 
-        // Load Admin Panel
+        // Load Admin Panel - Fixed Case Sensitivity Display
         function loadAdminData() {
             onValue(ref(db, 'users'), (s) => {
                 const list = document.getElementById('user-list');
@@ -124,11 +124,11 @@
                             <div class="p-4 rounded-xl mb-3 flex justify-between items-center ${isApproved ? 'approved-bg' : 'glass-panel'}">
                                 <div>
                                     <p class="font-bold text-sm ${isApproved ? 'text-emerald-400' : 'text-white'}">${u}</p>
-                                    <p class="text-[9px] opacity-50 uppercase tracking-tighter">PW: ${d.password}</p>
+                                    <p class="text-[10px] opacity-70">PW: ${d.password}</p>
                                 </div>
                                 <div class="flex gap-2">
-                                    <button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-2 rounded-lg text-[9px] font-black uppercase">Approve</button>
-                                    <button onclick="deleteUser('${u}')" class="bg-red-600 px-3 py-2 rounded-lg text-[9px] font-black uppercase">Del</button>
+                                    <button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-tighter">Approve</button>
+                                    <button onclick="deleteUser('${u}')" class="bg-red-600 px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-tighter">Del</button>
                                 </div>
                             </div>`;
                     });
