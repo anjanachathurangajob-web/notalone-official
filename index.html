@@ -4,6 +4,41 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Not Alone - Private Chat</title>
+    <link rel="icon" type="image/png" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+
+<script>
+    const manifest = {
+        "name": "Not Alone",
+        "short_name": "Not Alone",
+        "description": "Sri Lanka's Private Stranger Chat Platform",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#0a0514",
+        "theme_color": "#0a0514",
+        "icons": [
+            {
+                "src": "https://raw.githubusercontent.com/anjanachathurangajob-web/app/main/icon.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any"
+            },
+            {
+                "src": "https://raw.githubusercontent.com/anjanachathurangajob-web/app/main/icon.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "maskable"
+            }
+        ]
+    };
+    const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+    const manifestURL = URL.createObjectURL(blob);
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = manifestURL;
+    document.head.appendChild(link);
+</script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0514; color: white; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
