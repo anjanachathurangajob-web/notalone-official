@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Not Alone - Official</title>
+    <title>Not Alone - Private & Secure</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: sans-serif; background: #0a0514; color: white; overflow-x: hidden; }
@@ -30,7 +30,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         
-        // --- FIXED ADMIN & WHATSAPP DATA ---
+        // --- FIXED DATA ---
         const ADMIN_USER = "admin";
         const ADMIN_PW = "913132386V";
         const MY_WHATSAPP = "94773364401";
@@ -47,21 +47,19 @@
             document.querySelectorAll('.online-count').forEach(el => el.innerText = `${count} Online`);
         });
 
-        // Register Logic
+        // Register Logic (No WA Input)
         window.handleRegister = async () => {
             const u = document.getElementById('reg-user').value.trim();
             const p = document.getElementById('reg-pass').value.trim();
-            const wa = document.getElementById('reg-wa').value.trim();
-            if(!u || !p || !wa) return alert("Please fill all fields!");
+            if(!u || !p) return alert("Fill all fields!");
 
             await set(ref(db, `users/${u}`), { 
                 password: p, 
-                whatsapp: wa, 
                 approved: false, 
                 expiry: 0 
             });
             
-            const msg = `Hi Admin, I just registered on Not Alone.\nUsername: ${u}\nWhatsApp: ${wa}`;
+            const msg = `Hi Admin, I just registered on Not Alone.\nUsername: ${u}\nPlease approve my account.`;
             window.open(`https://wa.me/${MY_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
             alert("Registration requested! Wait for Admin Approval.");
             location.reload();
@@ -86,7 +84,7 @@
                     localStorage.setItem('chatUser', u);
                     location.reload();
                 } else {
-                    alert("Account pending approval or expired. Contact Admin.");
+                    alert("Account pending approval or expired.");
                 }
             } else { alert("Invalid Username or Password!"); }
         };
@@ -98,14 +96,12 @@
                 approved: true, 
                 expiry: Date.now() + thirtyDays 
             });
-            alert(u + " approved for 30 days!");
         };
 
         // Admin: Delete
         window.deleteUser = async (u) => {
-            if(confirm(`Are you sure you want to delete ${u}? They will have to register again.`)) {
+            if(confirm(`Delete ${u}?`)) {
                 await remove(ref(db, `users/${u}`));
-                alert("User deleted.");
             }
         };
 
@@ -121,7 +117,6 @@
                             <div class="p-4 rounded-xl mb-3 flex justify-between items-center ${isApproved ? 'approved-bg' : 'glass-panel'}">
                                 <div>
                                     <p class="font-bold text-sm ${isApproved ? 'text-emerald-400' : 'text-white'}">${u}</p>
-                                    <p class="text-[10px] opacity-70 italic">WA: ${d.whatsapp || 'N/A'}</p>
                                     <p class="text-[9px] opacity-50 uppercase">PW: ${d.password}</p>
                                 </div>
                                 <div class="flex gap-2">
@@ -157,17 +152,16 @@
         <h1 class="text-4xl font-black text-pink-500 mb-8 text-center uppercase italic">NOT ALONE</h1>
         <div class="glass-panel p-8 rounded-[2rem]">
             <div id="login-form">
-                <input id="login-user" placeholder="Username" class="w-full bg-white/5 p-4 mb-4 rounded-2xl outline-none border border-white/5 focus:border-pink-500/50 transition-all text-sm">
-                <input id="login-pass" type="password" placeholder="Password" class="w-full bg-white/5 p-4 mb-6 rounded-2xl outline-none border border-white/5 focus:border-pink-500/50 transition-all text-sm">
-                <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-bold uppercase shadow-lg shadow-pink-500/20">Login</button>
-                <p class="text-center text-[10px] opacity-40 mt-4 uppercase cursor-pointer hover:opacity-100 transition-all" onclick="document.getElementById('login-form').classList.add('hidden'); document.getElementById('reg-form').classList.remove('hidden');">New user? Register</p>
+                <input id="login-user" placeholder="Username" class="w-full bg-white/5 p-4 mb-4 rounded-2xl outline-none border border-white/5 text-sm">
+                <input id="login-pass" type="password" placeholder="Password" class="w-full bg-white/5 p-4 mb-6 rounded-2xl outline-none border border-white/5 text-sm">
+                <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-xl font-bold uppercase shadow-lg shadow-pink-500/20">Login</button>
+                <p class="text-center text-[10px] opacity-40 mt-4 uppercase cursor-pointer" onclick="document.getElementById('login-form').classList.add('hidden'); document.getElementById('reg-form').classList.remove('hidden');">New user? Register</p>
             </div>
             <div id="reg-form" class="hidden">
                 <input id="reg-user" placeholder="Choose Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none border border-white/5 text-sm">
-                <input id="reg-pass" placeholder="Choose Password" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none border border-white/5 text-sm">
-                <input id="reg-wa" placeholder="WhatsApp Number (9477...)" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none border border-white/5 text-sm">
+                <input id="reg-pass" placeholder="Choose Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none border border-white/5 text-sm">
                 <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase">Register</button>
-                <p class="text-center text-[10px] opacity-40 mt-4 uppercase cursor-pointer hover:opacity-100 transition-all" onclick="document.getElementById('reg-form').classList.add('hidden'); document.getElementById('login-form').classList.remove('hidden');">Back to Login</p>
+                <p class="text-center text-[10px] opacity-40 mt-4 uppercase cursor-pointer" onclick="document.getElementById('reg-form').classList.add('hidden'); document.getElementById('login-form').classList.remove('hidden');">Back to Login</p>
             </div>
         </div>
     </div>
@@ -176,14 +170,14 @@
         <div class="flex justify-between items-center mb-10">
             <h1 class="text-5xl font-black italic leading-[0.8]">NOT<br><span class="text-pink-500 uppercase">ALONE.</span></h1>
             <div class="flex flex-col items-end gap-2">
-                <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold hover:bg-white/5">Logout</button>
+                <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold">Logout</button>
                 <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
-                    <div class="online-dot animate-pulse"></div><span class="online-count text-[10px] font-bold text-emerald-400 uppercase tracking-widest">0 Online</span>
+                    <div class="online-dot animate-pulse"></div><span class="online-count text-[10px] font-bold text-emerald-400 uppercase">0 Online</span>
                 </div>
             </div>
         </div>
-        <p id="days-tag" class="text-emerald-400 font-black mb-8 uppercase tracking-[0.2em] text-[10px] bg-emerald-500/10 self-start px-4 py-1 rounded-full border border-emerald-500/20">-- Days Remaining</p>
-        <button class="w-full btn-gradient p-12 rounded-[2.5rem] font-black text-2xl uppercase shadow-2xl shadow-pink-500/30 transform active:scale-95 transition-all">Find Stranger →</button>
+        <p id="days-tag" class="text-emerald-400 font-black mb-8 uppercase text-[10px] bg-emerald-500/10 self-start px-4 py-1 rounded-full border border-emerald-500/20">-- Days Remaining</p>
+        <button class="w-full btn-gradient p-12 rounded-[2.5rem] font-black text-2xl uppercase shadow-2xl shadow-pink-500/30 active:scale-95 transition-all">Find Stranger →</button>
     </div>
 
     <div id="admin-panel" class="hidden flex-1 flex flex-col">
@@ -191,8 +185,7 @@
             <h2 class="text-2xl font-black text-blue-500 uppercase italic">Admin Panel</h2>
             <button onclick="location.reload()" class="bg-white/10 px-4 py-1 rounded-full text-[9px] font-bold uppercase">Exit</button>
         </div>
-        <div id="user-list" class="flex-1 overflow-y-auto pb-10">
-            </div>
+        <div id="user-list" class="flex-1 overflow-y-auto pb-10"></div>
     </div>
 
 </body>
