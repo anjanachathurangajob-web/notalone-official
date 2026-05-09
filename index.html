@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Not Alone - Private & Secure</title>
+    <title>Not Alone - Official</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: sans-serif; background: #0a0514; color: white; overflow-x: hidden; }
@@ -47,11 +47,18 @@
             document.querySelectorAll('.online-count').forEach(el => el.innerText = `${count} Online`);
         });
 
-        // Register Logic (No WA Input)
+        // Register Logic with Username Check
         window.handleRegister = async () => {
             const u = document.getElementById('reg-user').value.trim();
             const p = document.getElementById('reg-pass').value.trim();
-            if(!u || !p) return alert("Fill all fields!");
+            
+            if(!u || !p) return alert("Please fill all fields!");
+
+            // Check if Username Already Exists
+            const checkUser = await get(ref(db, `users/${u}`));
+            if(checkUser.exists()) {
+                return alert("Username already used. Please use another one!");
+            }
 
             await set(ref(db, `users/${u}`), { 
                 password: p, 
@@ -84,7 +91,7 @@
                     localStorage.setItem('chatUser', u);
                     location.reload();
                 } else {
-                    alert("Account pending approval or expired.");
+                    alert("Account pending approval or expired. Contact Admin.");
                 }
             } else { alert("Invalid Username or Password!"); }
         };
@@ -100,7 +107,7 @@
 
         // Admin: Delete
         window.deleteUser = async (u) => {
-            if(confirm(`Delete ${u}?`)) {
+            if(confirm(`Delete ${u}? User must re-register.`)) {
                 await remove(ref(db, `users/${u}`));
             }
         };
@@ -117,7 +124,7 @@
                             <div class="p-4 rounded-xl mb-3 flex justify-between items-center ${isApproved ? 'approved-bg' : 'glass-panel'}">
                                 <div>
                                     <p class="font-bold text-sm ${isApproved ? 'text-emerald-400' : 'text-white'}">${u}</p>
-                                    <p class="text-[9px] opacity-50 uppercase">PW: ${d.password}</p>
+                                    <p class="text-[9px] opacity-50 uppercase tracking-tighter">PW: ${d.password}</p>
                                 </div>
                                 <div class="flex gap-2">
                                     <button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-2 rounded-lg text-[9px] font-black uppercase">Approve</button>
@@ -154,13 +161,13 @@
             <div id="login-form">
                 <input id="login-user" placeholder="Username" class="w-full bg-white/5 p-4 mb-4 rounded-2xl outline-none border border-white/5 text-sm">
                 <input id="login-pass" type="password" placeholder="Password" class="w-full bg-white/5 p-4 mb-6 rounded-2xl outline-none border border-white/5 text-sm">
-                <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-xl font-bold uppercase shadow-lg shadow-pink-500/20">Login</button>
+                <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-xl font-bold uppercase">Login</button>
                 <p class="text-center text-[10px] opacity-40 mt-4 uppercase cursor-pointer" onclick="document.getElementById('login-form').classList.add('hidden'); document.getElementById('reg-form').classList.remove('hidden');">New user? Register</p>
             </div>
             <div id="reg-form" class="hidden">
                 <input id="reg-user" placeholder="Choose Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none border border-white/5 text-sm">
                 <input id="reg-pass" placeholder="Choose Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none border border-white/5 text-sm">
-                <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase">Register</button>
+                <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-xl font-bold uppercase">Register</button>
                 <p class="text-center text-[10px] opacity-40 mt-4 uppercase cursor-pointer" onclick="document.getElementById('reg-form').classList.add('hidden'); document.getElementById('login-form').classList.remove('hidden');">Back to Login</p>
             </div>
         </div>
@@ -170,14 +177,14 @@
         <div class="flex justify-between items-center mb-10">
             <h1 class="text-5xl font-black italic leading-[0.8]">NOT<br><span class="text-pink-500 uppercase">ALONE.</span></h1>
             <div class="flex flex-col items-end gap-2">
-                <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold">Logout</button>
+                <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold hover:bg-white/5">Logout</button>
                 <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
                     <div class="online-dot animate-pulse"></div><span class="online-count text-[10px] font-bold text-emerald-400 uppercase">0 Online</span>
                 </div>
             </div>
         </div>
         <p id="days-tag" class="text-emerald-400 font-black mb-8 uppercase text-[10px] bg-emerald-500/10 self-start px-4 py-1 rounded-full border border-emerald-500/20">-- Days Remaining</p>
-        <button class="w-full btn-gradient p-12 rounded-[2.5rem] font-black text-2xl uppercase shadow-2xl shadow-pink-500/30 active:scale-95 transition-all">Find Stranger →</button>
+        <button class="w-full btn-gradient p-12 rounded-[2.5rem] font-black text-2xl uppercase shadow-2xl active:scale-95 transition-all">Find Stranger →</button>
     </div>
 
     <div id="admin-panel" class="hidden flex-1 flex flex-col">
