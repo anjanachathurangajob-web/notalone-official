@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Not Alone - Stable Edition</title>
+    <title>Not Alone - Final Stable</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
@@ -12,8 +12,6 @@
         .btn-gradient { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
         .chat-bubble-me { background: #8b5cf6; border-radius: 18px 18px 4px 18px; }
         .chat-bubble-peer { background: #2d2d3d; border-radius: 18px 18px 18px 4px; }
-        .msg-animate { animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="p-6 h-screen flex flex-col">
@@ -33,34 +31,28 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-        const msgSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3');
-
         const CLOUD_NAME = "dgxpyzt7c"; //
-        const UPLOAD_PRESET = "notalone_preset"; 
+        const UPLOAD_PRESET = "notalone_preset";
 
         let myUser = localStorage.getItem('chatUser');
         let currentChatId = null;
+        let mediaRecorder;
+        let audioChunks = [];
 
-        // --- LOGOUT ANYWHERE ---
-        window.logout = () => {
-            localStorage.removeItem('chatUser');
-            location.reload();
+        window.logout = () => { 
+            if(myUser) remove(ref(db, `users/${myUser}/currentChat`));
+            localStorage.removeItem('chatUser'); 
+            location.reload(); 
         };
 
-        // --- MEDIA UPLOAD (Cloudinary) ---
+        // --- MEDIA UPLOAD ---
         window.uploadMedia = async (file, type) => {
-            if(!file || !currentChatId) return;
             const formData = new FormData();
             formData.append('file', file);
             formData.append('upload_preset', UPLOAD_PRESET);
-
-            try {
-                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, { method: 'POST', body: formData });
-                const data = await res.json();
-                push(ref(db, `messages/${currentChatId}`), { 
-                    u: myUser, t: data.secure_url, type: type, ts: Date.now() 
-                });
-            } catch (e) { alert("Upload error! Make sure preset is 'Unsigned'"); }
+            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, { method: 'POST', body: formData });
+            const data = await res.json();
+            push(ref(db, `messages/${currentChatId}`), { u: myUser, t: data.secure_url, type, ts: Date.now() });
         };
 
         window.triggerFile = (type) => {
@@ -71,82 +63,59 @@
             input.click();
         };
 
-        // --- CORE CHAT & AUTO-DELETE LOGIC ---
+        window.toggleRecord = async () => {
+            if (!mediaRecorder || mediaRecorder.state === "inactive") {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = () => uploadMedia(new Blob(audioChunks, { type: 'audio/webm' }), 'audio');
+                mediaRecorder.start();
+                document.getElementById('mic-btn').innerText = "🛑";
+            } else {
+                mediaRecorder.stop();
+                document.getElementById('mic-btn').innerText = "🎙️";
+            }
+        };
+
+        // --- CHAT LOGIC ---
         function openChatUI(chatId, peer) {
             currentChatId = chatId;
-            document.getElementById('main-dashboard').classList.add('hidden');
-            document.getElementById('loading-screen').classList.add('hidden');
+            document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
             document.getElementById('chat-screen').classList.remove('hidden');
             document.getElementById('peer-display').innerText = peer;
 
             onValue(ref(db, `messages/${chatId}`), (s) => {
                 const b = document.getElementById('messages');
-                const isInitial = b.innerHTML === "";
                 b.innerHTML = "";
-                
                 if(s.exists()){
                     const now = Date.now();
                     Object.entries(s.val()).forEach(([key, m]) => {
-                        // 1. Text Messages: දින 3කට පසු මකන්න
-                        if (m.type === 'text' && (now - m.ts > 259200000)) {
-                            remove(ref(db, `messages/${chatId}/${key}`));
-                            return;
-                        }
-
+                        if (m.type === 'text' && (now - m.ts > 259200000)) { remove(ref(db, `messages/${chatId}/${key}`)); return; }
                         const isMe = m.u === myUser;
-                        let content = `<p class="text-sm">${m.t}</p>`;
+                        let h = `<p>${m.t}</p>`;
+                        if(m.type==='image') h = `<img src="${m.t}" class="rounded-lg blur-md hover:blur-none" onclick="window.open('${m.t}'); remove(ref(db,'messages/${chatId}/${key}'))">`;
+                        else if(m.type==='audio') h = `<audio src="${m.t}" controls onended="remove(ref(db,'messages/${chatId}/${key}'))"></audio>`;
+                        else if(m.type==='video') h = `<video src="${m.t}" controls onended="remove(ref(db,'messages/${chatId}/${key}'))"></video>`;
 
-                        // 2. Media: බැලූ සැනින් හෝ ප්ලේ වූ පසු මැකීමට සැකසීම
-                        if(m.type === 'image') {
-                            content = `<img src="${m.t}" class="rounded-lg blur-md hover:blur-none transition-all cursor-pointer" 
-                                       onclick="window.open('${m.t}'); remove(ref(db, 'messages/${chatId}/${key}'))">
-                                       <p class="text-[8px] opacity-40 text-center mt-1 uppercase">View Once</p>`;
-                        } else if(m.type === 'audio') {
-                            content = `<audio src="${m.t}" controls class="h-8 w-40" onended="remove(ref(db, 'messages/${chatId}/${key}'))"></audio>`;
-                        } else if(m.type === 'video') {
-                            content = `<video src="${m.t}" controls class="rounded-lg" onended="remove(ref(db, 'messages/${chatId}/${key}'))"></video>`;
-                        }
-
-                        b.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-4 msg-animate">
-                            <div class="${isMe ? 'chat-bubble-me' : 'chat-bubble-peer'} px-4 py-2 max-w-[85%] shadow-lg">
-                                ${content}
-                            </div></div>`;
+                        b.innerHTML += `<div class="flex ${isMe?'justify-end':'justify-start'} mb-4">
+                            <div class="${isMe?'chat-bubble-me':'chat-bubble-peer'} px-4 py-2 max-w-[80%] shadow-lg">${h}</div>
+                        </div>`;
                     });
+                    b.scrollTop = b.scrollHeight;
                 }
-                b.scrollTop = b.scrollHeight;
-                if(!isInitial) msgSound.play().catch(()=>{});
             });
         }
-
-        window.sendMsg = () => {
-            const i = document.getElementById('msg-input');
-            if(i.value && currentChatId) {
-                push(ref(db, `messages/${currentChatId}`), { 
-                    u: myUser, t: i.value, type: 'text', ts: Date.now() 
-                });
-                i.value = "";
-            }
-        };
-
-        // UI Helpers (Login, Queue, etc.)
-        window.handleLogin = async () => {
-            const user = document.getElementById('username').value.trim();
-            const pass = document.getElementById('password').value.trim();
-            const s = await get(ref(db, `users/${user}`));
-            if (s.exists() && s.val().password === pass) {
-                localStorage.setItem('chatUser', user);
-                location.reload();
-            } else alert("Login failed!");
-        };
 
         window.startChatting = async () => {
             document.getElementById('main-dashboard').classList.add('hidden');
             document.getElementById('loading-screen').classList.remove('hidden');
+            
             const qSnap = await get(ref(db, 'queue'));
-            if (qSnap.exists()) {
-                const peer = Object.keys(qSnap.val())[0];
-                if (peer !== myUser) {
-                    const cid = `chat_${peer}_${myUser}`;
+            if(qSnap.exists()){
+                const peer = Object.keys(qSnap.val()).find(u => u !== myUser);
+                if(peer){
+                    const cid = `chat_${Date.now()}`;
                     await update(ref(db, `users/${peer}`), { currentChat: cid, chattingWith: myUser });
                     await update(ref(db, `users/${myUser}`), { currentChat: cid, chattingWith: peer });
                     await remove(ref(db, `queue/${peer}`));
@@ -157,62 +126,74 @@
             onDisconnect(ref(db, `queue/${myUser}`)).remove();
         };
 
+        window.sendMsg = () => {
+            const i = document.getElementById('msg-input');
+            if(i.value) { push(ref(db, `messages/${currentChatId}`), { u: myUser, t: i.value, type: 'text', ts: Date.now() }); i.value = ""; }
+        };
+
+        // --- AUTH ---
+        window.handleLogin = async () => {
+            const user = document.getElementById('username').value.trim();
+            const pass = document.getElementById('password').value.trim();
+            const s = await get(ref(db, `users/${user}`));
+            if (s.exists() && s.val().password === pass) { localStorage.setItem('chatUser', user); location.reload(); }
+            else alert("Login Failed");
+        };
+
         window.onload = () => {
             if(!myUser) document.getElementById('login-screen').classList.remove('hidden');
             else {
                 document.getElementById('main-dashboard').classList.remove('hidden');
-                document.getElementById('display-name').innerText = myUser;
-                onValue(ref(db, `users/${myUser}`), (s) => {
-                    if(s.val()?.currentChat) openChatUI(s.val().currentChat, s.val().chattingWith);
-                });
+                document.getElementById('display-user').innerText = myUser;
+                onValue(ref(db, `users/${myUser}`), (s) => { if(s.val()?.currentChat) openChatUI(s.val().currentChat, s.val().chattingWith); });
             }
         };
     </script>
 
-    <div id="login-screen" class="hidden flex-1 flex flex-col justify-center max-w-sm mx-auto">
-        <h1 class="text-4xl font-black italic text-blue-500 mb-8">Not Alone</h1>
+    <div id="login-screen" class="screen hidden flex-1 flex flex-col justify-center max-w-sm mx-auto">
+        <h1 class="text-4xl font-black italic text-blue-500 mb-8 text-center uppercase">Not Alone</h1>
         <div class="glass-panel p-8 rounded-[2.5rem]">
-            <input id="username" placeholder="Username" class="w-full bg-white/5 p-4 rounded-2xl mb-4 outline-none">
-            <input id="password" type="password" placeholder="Password" class="w-full bg-white/5 p-4 rounded-2xl mb-6 outline-none">
-            <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-black uppercase">Login</button>
+            <input id="username" placeholder="Username" class="w-full bg-white/5 p-4 rounded-2xl mb-4 outline-none border border-white/10">
+            <input id="password" type="password" placeholder="Password" class="w-full bg-white/5 p-4 rounded-2xl mb-6 outline-none border border-white/10">
+            <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-black">LOGIN</button>
         </div>
     </div>
 
-    <div id="main-dashboard" class="hidden flex-1 flex flex-col justify-center">
-        <div class="flex justify-between items-start">
-            <h1 class="text-6xl font-black uppercase mb-12 italic">Connect<br><span class="text-pink-500">Fast.</span></h1>
-            <button onclick="logout()" class="text-[10px] border border-white/20 px-4 py-2 rounded-full opacity-50">LOGOUT</button>
+    <div id="main-dashboard" class="screen hidden flex-1 flex flex-col justify-center">
+        <div class="flex justify-between mb-12">
+            <h1 class="text-5xl font-black italic uppercase leading-none">Connect<br><span class="text-pink-500">Fast.</span></h1>
+            <button onclick="logout()" class="text-[10px] border border-white/20 px-4 py-2 rounded-full h-fit">LOGOUT</button>
         </div>
-        <p class="mb-4 text-xs opacity-50">User: <span id="display-name"></span></p>
-        <button onclick="startChatting()" class="w-full btn-gradient p-8 rounded-[2rem] font-black text-xl shadow-2xl">FIND SOMEONE →</button>
+        <p class="text-xs opacity-40 mb-4 italic">Logged in as: <span id="display-user"></span></p>
+        <button onclick="startChatting()" class="w-full btn-gradient p-10 rounded-[2.5rem] font-black text-2xl shadow-2xl uppercase">Find Someone →</button>
     </div>
 
-    <div id="chat-screen" class="hidden fixed inset-0 bg-[#0a0514] p-6 flex flex-col z-50">
+    <div id="chat-screen" class="screen hidden fixed inset-0 bg-[#0a0514] p-6 flex flex-col z-50">
         <div class="flex justify-between items-center mb-6">
-            <h2 class="text-xl font-black italic text-blue-500">Not Alone</h2>
+            <h2 class="text-xl font-black italic text-blue-500 uppercase">Not Alone</h2>
             <div class="flex items-center gap-3">
-                <span id="peer-display" class="text-[10px] font-bold uppercase text-purple-400"></span>
-                <button onclick="logout()" class="text-[9px] border border-red-500/40 px-3 py-1 rounded-full text-red-500">LOGOUT</button>
+                <span id="peer-display" class="text-[10px] font-bold text-purple-400"></span>
+                <button onclick="logout()" class="text-[9px] bg-red-500/20 text-red-500 px-3 py-1 rounded-full">LOGOUT</button>
             </div>
         </div>
         <div id="messages" class="flex-1 overflow-y-auto mb-6"></div>
-        <div class="glass-panel p-2 rounded-[2.5rem] flex flex-col gap-2 shadow-2xl">
-            <div class="flex justify-around py-2 border-b border-white/5">
-                <button onclick="triggerFile('image')" class="text-xl">🖼️</button>
-                <button onclick="triggerFile('video')" class="text-xl">🎥</button>
-                <button onclick="alert('Mic logic integration ready')" class="text-xl">🎙️</button>
+        <div class="glass-panel p-2 rounded-[2.5rem] shadow-2xl">
+            <div class="flex justify-around py-3 border-b border-white/5">
+                <button onclick="triggerFile('image')">🖼️</button>
+                <button onclick="triggerFile('video')">🎥</button>
+                <button id="mic-btn" onclick="toggleRecord()">🎙️</button>
             </div>
-            <div class="flex gap-2">
-                <input id="msg-input" placeholder="Type a message..." class="flex-1 bg-transparent p-4 outline-none text-sm" onkeypress="if(event.key==='Enter') sendMsg()">
-                <button onclick="sendMsg()" class="btn-gradient px-8 py-3 rounded-2xl font-black text-xs uppercase">Send</button>
+            <div class="flex gap-2 p-1">
+                <input id="msg-input" placeholder="Type..." class="flex-1 bg-transparent p-4 outline-none text-sm" onkeypress="if(event.key==='Enter') sendMsg()">
+                <button onclick="sendMsg()" class="btn-gradient px-8 rounded-2xl font-black text-xs uppercase">Send</button>
             </div>
         </div>
     </div>
 
-    <div id="loading-screen" class="hidden flex-1 flex flex-col items-center justify-center">
-        <div class="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4 shadow-[0_0_20px_rgba(236,72,153,0.5)]"></div>
-        <p class="text-[10px] uppercase tracking-widest animate-pulse">Finding a stranger for you...</p>
-        <button onclick="location.reload()" class="mt-8 text-[10px] opacity-40">CANCEL</button>
+    <div id="loading-screen" class="screen hidden flex-1 flex flex-col items-center justify-center">
+        <div class="w-14 h-14 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p class="text-[10px] uppercase opacity-50 tracking-tighter">Searching for a stranger...</p>
+        <button onclick="location.reload()" class="mt-8 text-[10px] opacity-30 underline">CANCEL</button>
     </div>
 </body>
 </html>
