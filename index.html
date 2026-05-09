@@ -235,31 +235,39 @@
 
         function loadAdminData() {
             onValue(ref(db, 'users'), (s) => {
-                const list = document.getElementById('user-list'); list.innerHTML = "";
+                const list = document.getElementById('user-list');
+                list.innerHTML = "";
                 if(s.exists()) {
                     Object.entries(s.val()).forEach(([u, d]) => {
                         if(u === "admin") return;
                         const isApproved = d.approved && Date.now() < d.expiry;
-                        list.innerHTML += `<div class="p-4 glass-panel rounded-2xl flex justify-between items-center border ${isApproved ? 'border-emerald-500/50' : 'border-white/5'}">
+                        
+                        // User Block
+                        const userDiv = document.createElement('div');
+                        userDiv.className = `p-4 glass-panel rounded-2xl flex justify-between items-center border ${isApproved ? 'border-emerald-500/50' : 'border-white/5'}`;
+                        
+                        userDiv.innerHTML = `
                             <div>
                                 <p class="font-bold ${isApproved ? 'text-emerald-400' : 'text-pink-500'}">${u}</p>
                                 <p class="text-[8px] opacity-40">${isApproved ? 'APPROVED' : 'PENDING'}</p>
                             </div>
                             <div class="flex gap-2">
-                                <button onclick="approve('${u}')" class="${isApproved ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-600 text-white'} px-3 py-2 rounded-xl text-[10px] font-black uppercase">
+                                <button onclick="approveUser('${u}')" class="${isApproved ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-600 text-white'} px-3 py-2 rounded-xl text-[10px] font-black uppercase">
                                     ${isApproved ? 'Extend' : 'Approve'}
                                 </button>
                                 <button onclick="deleteUser('${u}')" class="bg-red-500/20 text-red-500 border border-red-500/30 px-3 py-2 rounded-xl text-[10px] font-black uppercase">
                                     Del
                                 </button>
                             </div>
-                        </div>`;
+                        `;
+                        list.appendChild(userDiv);
                     });
                 }
             });
         }
-        window.approve = (u) => update(ref(db, `users/${u}`), { approved: true, expiry: Date.now() + 2592000000 });
-        window.deleteUser = (u) => { if(confirm(`Delete ${u}?`)) remove(ref(db, `users/${u}`)); };
+
+        window.approveUser = (u) => update(ref(db, `users/${u}`), { approved: true, expiry: Date.now() + 2592000000 });
+        window.deleteUser = (u) => { if(confirm(`Delete user ${u}?`)) remove(ref(db, `users/${u}`)); };
 
         window.onload = async () => {
             if(myUser) {
