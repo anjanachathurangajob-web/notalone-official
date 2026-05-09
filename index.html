@@ -87,7 +87,6 @@
             onDisconnect(ref(db, `queue/${myUser}`)).remove();
         }
 
-        // Real-time Online Count Logic
         onValue(ref(db, 'online'), (s) => {
             const count = s.exists() ? Object.keys(s.val()).length : 0;
             document.querySelectorAll('.online-count').forEach(el => el.innerText = `${count} Online`);
@@ -109,6 +108,7 @@
             } else alert("Invalid Login!");
         };
 
+        // FIXED: iPhone & All Devices friendly Register Function
         window.handleRegister = async () => {
             const u = document.getElementById('reg-user').value.trim();
             const p = document.getElementById('reg-pass').value.trim();
@@ -116,9 +116,15 @@
             const check = await get(ref(db, `users/${u}`));
             if(check.exists()) return alert("Username used!");
             await set(ref(db, `users/${u}`), { password: p, approved: false, expiry: 0 });
+            
             const msg = `Hi Admin, I just registered on Not Alone.\nUsername: ${u}\nPlease approve my account.`;
-            window.open(`https://wa.me/${MY_WHATSAPP}?text=${encodeURIComponent(msg)}`);
-            location.reload();
+            
+            // Redirecting instead of window.open for better compatibility
+            window.location.href = `https://wa.me/${MY_WHATSAPP}?text=${encodeURIComponent(msg)}`;
+            
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
         };
 
         window.findStranger = async () => {
