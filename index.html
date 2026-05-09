@@ -4,40 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Not Alone - Private Chat</title>
-    <link rel="icon" type="image/png" href="icon.png">
-<link rel="apple-touch-icon" href="icon.png">
-
-<script>
-    const manifest = {
-        "name": "Not Alone",
-        "short_name": "Not Alone",
-        "description": "Sri Lanka's Private Stranger Chat Platform",
-        "start_url": "/",
-        "display": "standalone",
-        "background_color": "#0a0514",
-        "theme_color": "#0a0514",
-        "icons": [
-            {
-                "src": "https://raw.githubusercontent.com/anjanachathurangajob-web/app/main/icon.png",
-                "sizes": "192x192",
-                "type": "image/png",
-                "purpose": "any"
-            },
-            {
-                "src": "https://raw.githubusercontent.com/anjanachathurangajob-web/app/main/icon.png",
-                "sizes": "512x512",
-                "type": "image/png",
-                "purpose": "maskable"
-            }
-        ]
-    };
-    const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-    const manifestURL = URL.createObjectURL(blob);
-    const link = document.createElement('link');
-    link.rel = 'manifest';
-    link.href = manifestURL;
-    document.head.appendChild(link);
-</script>
+    
+    <script>
+        const manifest = {
+            "name": "Not Alone",
+            "short_name": "Not Alone",
+            "description": "Sri Lanka's Private Stranger Chat Platform",
+            "start_url": "/",
+            "display": "standalone",
+            "background_color": "#0a0514",
+            "theme_color": "#0a0514",
+            "icons": [
+                {
+                    "src": "https://raw.githubusercontent.com/anjanachathurangajob-web/notalone-official/main/icon.png",
+                    "sizes": "192x192",
+                    "type": "image/png",
+                    "purpose": "any"
+                },
+                {
+                    "src": "https://raw.githubusercontent.com/anjanachathurangajob-web/notalone-official/main/icon.png",
+                    "sizes": "512x512",
+                    "type": "image/png",
+                    "purpose": "maskable"
+                }
+            ]
+        };
+        const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = manifestURL;
+        document.head.appendChild(link);
+    </script>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -316,7 +314,7 @@
             <h1 class="text-5xl font-black italic leading-none uppercase tracking-tighter">NOT<br><span class="text-pink-500">ALONE.</span></h1>
             <div class="flex flex-col items-end gap-2">
                 <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold">Logout / අයින් වෙන්න</button>
-                <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
+                <div class="items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5 hidden md:flex">
                     <div class="online-dot animate-pulse"></div><span class="online-count text-[9px] text-emerald-400 font-bold uppercase">0 Online</span>
                 </div>
             </div>
