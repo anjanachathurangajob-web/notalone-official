@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Not Alone - 100% Fixed</title>
+    <title>Not Alone - Final Verified</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         html, body { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background: #0a0514; color: white; font-family: sans-serif; }
@@ -160,7 +160,8 @@
             const p = document.getElementById('reg-pass').value.trim();
             if(!u || !p) return alert("Fill all! / සියල්ල පුරවන්න!");
             await set(ref(db, `users/${u}`), { password: p, approved: false, expiry: 0 });
-            const waMsg = `Hi Admin, I just registered on Not Alone. Username: ${u}. Please approve my account.`;
+            // UPDATED WHATSAPP MESSAGE (STRICTLY AS REQUESTED)
+            const waMsg = `Hi Admin, I just registered on Not Alone.\nUsername: ${u}\nPlease approve my account.`;
             window.location.href = `https://wa.me/${MY_WHATSAPP}?text=${encodeURIComponent(waMsg)}`;
         };
 
