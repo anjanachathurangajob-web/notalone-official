@@ -48,6 +48,7 @@
         if(myUser) {
             set(ref(db, `online/${myUser}`), { status: "idle" });
             onDisconnect(ref(db, `online/${myUser}`)).remove();
+            onDisconnect(ref(db, `queue/${myUser}`)).remove();
         }
 
         onValue(ref(db, 'online'), (s) => {
@@ -84,43 +85,43 @@
             location.reload();
         };
 
-        // --- STABLE QUICK MATCHING ---
+        // --- ULTRA FAST QUEUE MATCHING ---
         window.findStranger = async () => {
             document.getElementById('main-dashboard').classList.add('hidden');
             document.getElementById('chat-screen').classList.add('hidden');
             document.getElementById('searching-ui').classList.remove('hidden');
 
-            await update(ref(db, `online/${myUser}`), { status: "searching", room: null });
+            const queueRef = ref(db, 'queue');
+            const myQueueRef = ref(db, `queue/${myUser}`);
 
-            const unsubOnline = onValue(ref(db, 'online'), async (snapshot) => {
-                const users = snapshot.val() || {};
-                let partner = Object.keys(users).find(u => u !== myUser && users[u].status === "searching");
-
-                if (partner) {
-                    const roomId = [myUser, partner].sort().join("_");
-                    const roomRef = ref(db, `rooms/${roomId}`);
-                    
-                    const result = await runTransaction(roomRef, (currentData) => {
-                        if (currentData === null) {
-                            return { users: [myUser, partner], activeUsers: [myUser, partner], createdAt: Date.now() };
-                        }
-                        return; 
-                    });
-
-                    if (result.committed) {
-                        await update(ref(db, `online/${myUser}`), { status: "chatting", room: roomId });
-                        await update(ref(db, `online/${partner}`), { status: "chatting", room: roomId });
-                        unsubOnline();
-                    }
-                }
-            });
-
+            // Listen for room assignment first
             const unsubRoom = onValue(ref(db, `online/${myUser}/room`), (s) => {
                 if(s.exists() && s.val()) {
+                    remove(myQueueRef);
                     startChat(s.val());
                     unsubRoom();
                 }
             });
+
+            // Try to find someone in queue
+            const snapshot = await get(queueRef);
+            const queue = snapshot.val() || {};
+            const partner = Object.keys(queue).find(u => u !== myUser);
+
+            if (partner) {
+                const roomId = [myUser, partner].sort().join("_");
+                // Remove partner from queue and assign room to both
+                await remove(ref(db, `queue/${partner}`));
+                await update(ref(db), {
+                    [`rooms/${roomId}`]: { users: [myUser, partner], activeUsers: [myUser, partner], createdAt: Date.now() },
+                    [`online/${myUser}`]: { status: "chatting", room: roomId },
+                    [`online/${partner}`]: { status: "chatting", room: roomId }
+                });
+            } else {
+                // No one in queue, I join the queue
+                await set(myQueueRef, { joinedAt: Date.now() });
+                await update(ref(db, `online/${myUser}`), { status: "searching", room: null });
+            }
         };
 
         function startChat(roomId) {
