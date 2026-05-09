@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Not Alone - 100% Final</title>
+    <title>Not Alone - 100% Perfect Match</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         html, body { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background: #0a0514; color: white; font-family: sans-serif; }
         .app-container { display: flex; flex-direction: column; height: 100vh; height: -webkit-fill-available; width: 100vw; }
         .chat-header { height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: #0a0514; border-bottom: 1px solid rgba(255, 255, 255, 0.05); flex-shrink: 0; }
         #chat-messages { flex-grow: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 12px; -webkit-overflow-scrolling: touch; }
-        #chat-messages::-webkit-scrollbar { width: 0; }
         .input-wrapper { padding: 10px 16px; background: #0a0514; border-top: 1px solid rgba(255, 255, 255, 0.05); flex-shrink: 0; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
         .btn-gradient { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
         .glass-panel { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
@@ -43,13 +42,13 @@
 
         <div id="main-dashboard" class="hidden flex-1 flex flex-col items-center justify-center p-8">
             <div class="w-full flex justify-between absolute top-0 p-6 items-center">
-                <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold text-white/50">Logout / අයින් වන්න</button>
-                <div class="bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-[9px] font-bold border border-emerald-500/20">
+                <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold">Logout</button>
+                <div class="bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-[9px] font-bold">
                     <span class="online-count">0</span> ONLINE
                 </div>
             </div>
             <h1 class="text-6xl font-black italic mb-2 text-pink-500 uppercase tracking-tighter text-center">NOT ALONE.</h1>
-            <p id="days-tag" class="text-[10px] bg-white/5 px-4 py-1 rounded-full mb-12 font-bold tracking-widest">-- Days Remaining</p>
+            <p id="days-tag" class="text-[10px] bg-white/5 px-4 py-1 rounded-full mb-12 font-bold">-- Days Remaining</p>
             <button onclick="findStranger()" class="w-full btn-gradient p-14 rounded-[3rem] font-black text-xl uppercase shadow-2xl active:scale-95 transition-all text-center">Find Stranger<br><span class="text-[11px] opacity-70">හිතවතෙකු සොයන්න</span></button>
         </div>
 
@@ -57,27 +56,27 @@
             <div class="chat-header">
                 <button onclick="logout()" class="text-[8px] text-white/40 uppercase font-bold">Logout</button>
                 <div class="flex flex-col items-center">
-                    <span class="text-[10px] font-black text-pink-500 uppercase tracking-widest">Chat</span>
+                    <span class="text-[10px] font-black text-pink-500 uppercase">Chat</span>
                     <span class="text-[8px] text-emerald-400 font-bold online-count">0 Online</span>
                 </div>
-                <div id="chat-controls" class="flex gap-2">
-                    <button id="end-btn" onclick="endChat()" class="bg-red-500/20 text-red-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase border border-red-500/30">End</button>
-                    <button id="new-chat-btn" onclick="location.reload()" class="hidden bg-emerald-500/20 text-emerald-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase border border-emerald-500/30">New Chat</button>
+                <div class="flex gap-2">
+                    <button id="end-btn" onclick="endChat()" class="bg-red-500/20 text-red-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase">End</button>
+                    <button id="new-chat-btn" onclick="location.reload()" class="hidden bg-emerald-500/20 text-emerald-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase">New Chat</button>
                 </div>
             </div>
             <div id="chat-messages"></div>
             <div id="chat-input-area" class="input-wrapper">
-                <div class="flex gap-2 items-center bg-white/5 p-2 rounded-[2rem] border border-white/10 shadow-2xl">
-                    <button onclick="toggleRecord()" class="bg-white/10 w-11 h-11 rounded-full text-[7px] font-black uppercase">Voice</button>
+                <div class="flex gap-2 items-center bg-white/5 p-2 rounded-[2rem] border border-white/10">
+                    <button class="bg-white/10 w-11 h-11 rounded-full text-[7px] font-black uppercase">Voice</button>
                     <input id="msg-input" placeholder="Message... පණිවිඩය..." class="flex-1 bg-transparent p-2 outline-none text-sm text-white">
-                    <button onclick="sendMsg()" class="btn-gradient w-11 h-11 rounded-full font-black text-[7px] uppercase">Send<br>යවන්න</button>
+                    <button onclick="sendMsg()" class="btn-gradient w-11 h-11 rounded-full font-black text-[7px] uppercase">Send</button>
                 </div>
             </div>
         </div>
 
         <div id="admin-panel" class="hidden flex-1 flex flex-col p-6 overflow-y-auto bg-black">
             <div class="flex justify-between items-center mb-8">
-                <h2 class="font-black text-blue-500 uppercase italic">Admin Panel</h2>
+                <h2 class="font-black text-blue-500 italic">Admin Panel</h2>
                 <button onclick="location.reload()" class="text-[10px] bg-white/10 px-4 py-2 rounded-full font-bold">Exit</button>
             </div>
             <div id="user-list" class="space-y-4"></div>
@@ -98,8 +97,6 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-        const ADMIN_USER = "admin";
-        const ADMIN_PW = "913132386V";
         const MY_WHATSAPP = "94773364401";
         const msgSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3');
 
@@ -126,7 +123,7 @@
         window.handleLogin = async () => {
             const u = document.getElementById('login-user').value.trim();
             const p = document.getElementById('login-pass').value.trim();
-            if(u === ADMIN_USER && p === ADMIN_PW) {
+            if(u === "admin" && p === "913132386V") {
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('admin-panel').classList.remove('hidden');
                 loadAdminData(); return;
@@ -135,7 +132,7 @@
             if(s.exists() && s.val().password === p) {
                 if(s.val().approved && Date.now() < s.val().expiry) {
                     localStorage.setItem('chatUser', u); location.reload();
-                } else alert("Not Approved! / අනුමත කර නැත.");
+                } else alert("Not Approved!");
             } else alert("Login Failed!");
         };
 
@@ -144,25 +141,23 @@
             const p = document.getElementById('reg-pass').value.trim();
             if(!u || !p) return alert("Fill all!");
             await set(ref(db, `users/${u}`), { password: p, approved: false, expiry: 0 });
-            // iPhone WhatsApp Fix
-            window.location.href = `https://wa.me/${MY_WHATSAPP}?text=Hi Admin, Please approve me. Username: ${u}`;
+            window.location.href = `https://wa.me/${MY_WHATSAPP}?text=Approve User: ${u}`;
         };
 
         window.findStranger = async () => {
             document.getElementById('main-dashboard').classList.add('hidden');
             document.getElementById('chat-screen').classList.remove('hidden');
             const msgBox = document.getElementById('chat-messages');
-            msgBox.innerHTML = '<div class="system-msg">Searching for a real user...</div>';
+            msgBox.innerHTML = '<div class="system-msg">Searching for someone...</div>';
 
-            const queueRef = ref(db, 'queue');
-            const snapshot = await get(queueRef);
+            const queueSnap = await get(ref(db, 'queue'));
             let partner = null;
-            
-            if(snapshot.exists()){
-                partner = Object.keys(snapshot.val()).find(u => u !== myUser);
+
+            if (queueSnap.exists()) {
+                partner = Object.keys(queueSnap.val()).find(u => u !== myUser);
             }
 
-            if(partner) {
+            if (partner) {
                 const roomId = [myUser, partner].sort().join("_");
                 await update(ref(db), {
                     [`rooms/${roomId}`]: { users: [myUser, partner], active: true },
@@ -173,9 +168,10 @@
                 startChat(roomId);
             } else {
                 await set(ref(db, `queue/${myUser}`), { joinedAt: Date.now() });
-                onValue(ref(db, `online/${myUser}/room`), (s) => {
-                    if(s.exists()) {
-                        off(ref(db, `online/${myUser}/room`));
+                const roomListener = ref(db, `online/${myUser}/room`);
+                onValue(roomListener, (s) => {
+                    if (s.exists()) {
+                        off(roomListener);
                         startChat(s.val());
                     }
                 });
@@ -185,7 +181,7 @@
         function startChat(roomId) {
             currentRoom = roomId;
             const msgBox = document.getElementById('chat-messages');
-            msgBox.innerHTML = '<div class="system-msg">Connected with a stranger!</div>';
+            msgBox.innerHTML = '<div class="system-msg">Connected!</div>';
 
             onValue(ref(db, `rooms/${roomId}`), (s) => {
                 if(!s.exists()) {
@@ -198,13 +194,13 @@
 
             onValue(ref(db, `rooms/${roomId}/messages`), (s) => {
                 if(s.exists()){
-                    const data = Object.values(s.val());
-                    msgBox.innerHTML = '<div class="system-msg">Connected with a stranger!</div>';
-                    data.forEach(m => {
+                    const msgs = Object.values(s.val());
+                    msgBox.innerHTML = '<div class="system-msg">Connected!</div>';
+                    msgs.forEach(m => {
                         msgBox.innerHTML += `<div class="${m.sender === myUser ? 'msg-me' : 'msg-stranger'}">${m.text}</div>`;
                     });
-                    if(data.length > lastMsgCount && data[data.length-1].sender !== myUser) msgSound.play();
-                    lastMsgCount = data.length;
+                    if(msgs.length > lastMsgCount && msgs[msgs.length-1].sender !== myUser) msgSound.play();
+                    lastMsgCount = msgs.length;
                     msgBox.scrollTop = msgBox.scrollHeight;
                 }
             });
@@ -213,7 +209,7 @@
         window.sendMsg = () => {
             const inp = document.getElementById('msg-input');
             if(!inp.value || !currentRoom) return;
-            push(ref(db, `rooms/${currentRoom}/messages`), { sender: myUser, text: inp.value, time: Date.now() });
+            push(ref(db, `rooms/${currentRoom}/messages`), { sender: myUser, text: inp.value });
             inp.value = "";
         };
 
@@ -224,8 +220,8 @@
                 const list = document.getElementById('user-list'); list.innerHTML = "";
                 if(s.exists()) {
                     Object.entries(s.val()).forEach(([u, d]) => {
-                        if(u === ADMIN_USER) return;
-                        list.innerHTML += `<div class="p-4 glass-panel rounded-2xl flex justify-between items-center"><p class="font-bold text-pink-500">${u}</p><button onclick="approve('${u}')" class="bg-emerald-600 px-4 py-2 rounded-xl text-[10px]">Approve</button></div>`;
+                        if(u === "admin") return;
+                        list.innerHTML += `<div class="p-4 glass-panel rounded-2xl flex justify-between items-center"><p>${u}</p><button onclick="approve('${u}')" class="bg-emerald-600 px-4 py-2 rounded-xl font-bold">Approve</button></div>`;
                     });
                 }
             });
