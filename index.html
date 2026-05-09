@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background: #0a0514; color: white; }
-        .hero-text { font-weight: 900; line-height: 0.9; font-size: 4.5rem; letter-spacing: -2px; }
+        .hero-text { font-weight: 900; line-height: 0.9; font-size: 4rem; letter-spacing: -2px; }
         .glass-panel { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
         .btn-gradient { background: linear-gradient(90deg, #8b5cf6, #ec4899); transition: all 0.3s; }
         .chat-bubble-me { background: #8b5cf6; border-radius: 18px 18px 4px 18px; }
@@ -34,28 +34,30 @@
         
         let myUser = localStorage.getItem('chatUser');
         let currentChatId = null;
-        let peerUsername = "Stranger";
 
-        window.logout = () => { localStorage.clear(); location.reload(); };
-
+        // --- AUTH ---
         window.handleLogin = async () => {
             const user = document.getElementById('username').value.trim();
             const pass = document.getElementById('password').value.trim();
-            if(user === "admin" && pass === "913132386V") { localStorage.setItem('isAdmin', 'true'); location.reload(); return; }
             const s = await get(ref(db, 'users/' + user));
-            if (s.exists() && s.val().password === pass && s.val().isPaid) {
+            if (s.exists() && s.val().password === pass) {
                 localStorage.setItem('chatUser', user);
                 location.reload();
-            } else { alert("Login failed."); }
+            } else { alert("ලොගින් වීමට නොහැක. තොරතුරු පරීක්ෂා කරන්න."); }
         };
 
+        window.logout = () => { 
+            if(myUser) remove(ref(db, `online/${myUser}`));
+            localStorage.clear(); 
+            location.reload(); 
+        };
+
+        // --- MATCHING ---
         window.findChat = async () => {
             document.getElementById('main-dashboard').classList.add('hidden');
             document.getElementById('loading-screen').classList.remove('hidden');
-            
             const queueRef = ref(db, 'queue');
             const snapshot = await get(queueRef);
-            
             if (snapshot.exists()) {
                 const peer = Object.keys(snapshot.val())[0];
                 if (peer !== myUser) {
@@ -72,45 +74,34 @@
 
         function startChat(chatId, peer) {
             currentChatId = chatId;
-            peerUsername = peer;
             document.getElementById('loading-screen').classList.add('hidden');
             document.getElementById('chat-screen').classList.remove('hidden');
-            document.getElementById('peer-name-display').innerText = peer;
+            document.getElementById('peer-name').innerText = peer;
 
             onValue(ref(db, `messages/${chatId}`), (s) => {
                 const b = document.getElementById('messages');
                 const isInitial = b.innerHTML === "";
                 b.innerHTML = "";
-                let lastU = "";
-                
                 if(s.exists()){
                     const data = s.val();
-                    if(data.status === 'ended') { endChatSession(); return; }
+                    if(data.status === 'ended') { 
+                        document.getElementById('status-info').innerText = "Stranger disconnected.";
+                        return;
+                    }
                     Object.values(data).forEach(m => {
                         if(m.u) {
-                            const isMe = m.u === myUser; lastU = m.u;
+                            const isMe = m.u === myUser;
                             b.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-3">
                                 <div class="${isMe ? 'chat-bubble-me' : 'chat-bubble-peer'} px-4 py-2 max-w-[80%]">
-                                    <p class="text-[10px] opacity-50 mb-1">${isMe ? 'You' : peerUsername}</p>
+                                    <p class="text-[10px] opacity-50">${isMe ? 'You' : peer}</p>
                                     <p class="text-sm">${m.t}</p>
                                 </div></div>`;
                         }
                     });
                 }
                 b.scrollTop = b.scrollHeight;
-                if(!isInitial && lastU !== myUser) msgSound.play().catch(() => {});
+                if(!isInitial) msgSound.play().catch(()=>{});
             });
-        }
-
-        async function endChatSession() {
-            // Save to History before cleaning
-            const chatSnap = await get(ref(db, `messages/${currentChatId}`));
-            if(chatSnap.exists()) {
-                await push(ref(db, `history/${myUser}`), { partner: peerUsername, msgs: chatSnap.val(), date: Date.now() });
-            }
-            document.getElementById('status-info').innerText = "Stranger left the chat.";
-            document.getElementById('msg-input-area').classList.add('hidden');
-            document.getElementById('chat-end-btns').classList.remove('hidden');
         }
 
         window.sendMsg = () => {
@@ -121,31 +112,28 @@
             }
         };
 
-        window.showHistory = async () => {
-            document.getElementById('main-dashboard').classList.add('hidden');
-            document.getElementById('history-screen').classList.remove('hidden');
-            const s = await get(ref(db, `history/${myUser}`));
-            const hBox = document.getElementById('history-list');
-            hBox.innerHTML = "";
-            if(s.exists()) {
-                s.forEach(c => {
-                    const d = c.val();
-                    hBox.innerHTML += `<div class="glass-panel p-4 rounded-2xl mb-3">
-                        <p class="text-xs text-pink-500 font-bold">Chat with ${d.partner}</p>
-                        <p class="text-[10px] opacity-40">${new Date(d.date).toLocaleString()}</p>
-                    </div>`;
-                });
-            } else { hBox.innerHTML = "<p class='text-center opacity-30'>No history found.</p>"; }
-        };
-
+        // --- DASHBOARD DATA ---
         window.onload = () => {
             if(!myUser) document.getElementById('login-screen').classList.remove('hidden');
             else {
                 document.getElementById('display-name').innerText = myUser;
                 document.getElementById('main-dashboard').classList.remove('hidden');
+                
+                // Online Status
+                set(ref(db, `online/${myUser}`), true);
+                onDisconnect(ref(db, `online/${myUser}`)).remove();
+
+                // Real-time Online Count
+                onValue(ref(db, 'online'), (s) => {
+                    document.getElementById('online-count').innerText = s.exists() ? Object.keys(s.val()).length : 0;
+                });
+
+                // Check for chats
                 onValue(ref(db, `users/${myUser}`), (s) => {
-                    const data = s.val();
-                    if(data?.currentChat) startChat(data.currentChat, data.chattingWith);
+                    const d = s.val();
+                    if(d?.currentChat) startChat(d.currentChat, d.chattingWith);
+                    // 30 Days Left Calculation (Assuming fixed logic for now)
+                    document.getElementById('days-left').innerText = d?.daysRemaining || "29 days left";
                 });
             }
         };
@@ -154,61 +142,57 @@
 <body class="p-6 h-screen flex flex-col overflow-hidden">
 
     <div id="login-screen" class="hidden flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
-        <h1 class="hero-text mb-8">Login</h1>
-        <div class="glass-panel p-6 rounded-[2rem]">
+        <h1 class="hero-text mb-2 text-blue-500 italic">Not Alone</h1>
+        <p class="text-gray-400 mb-8 text-sm">ආරක්ෂිතව අදහස් බෙදාගන්න</p>
+        <div class="glass-panel p-8 rounded-[2rem]">
             <input id="username" placeholder="Username" class="w-full bg-white/5 p-4 rounded-xl mb-4 outline-none border border-white/10">
             <input id="password" type="password" placeholder="Password" class="w-full bg-white/5 p-4 rounded-xl mb-6 outline-none border border-white/10">
-            <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-xl font-bold">Access Chat</button>
+            <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-xl font-bold uppercase tracking-widest">Login / Register</button>
         </div>
     </div>
 
     <div id="main-dashboard" class="hidden flex-1 flex flex-col">
         <div class="flex justify-between items-center mb-10">
-            <div class="flex gap-2">
-                <span class="glass-panel px-3 py-1 rounded-full text-[10px] flex items-center gap-2">
-                    <span class="w-2 h-2 bg-green-500 rounded-full animate-ping"></span> 1 people online
-                </span>
-            </div>
-            <div class="flex items-center gap-4">
-                <span class="text-xs font-bold text-yellow-500">👋 <span id="display-name"></span></span>
+            <span class="glass-panel px-4 py-2 rounded-full text-[10px] flex items-center gap-2">
+                <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> <span id="online-count">0</span> people online now
+            </span>
+            <div class="flex gap-4 items-center">
+                <span class="text-xs font-bold text-yellow-500">👋 <span id="display-name"></span> <span id="days-left" class="ml-2 text-green-400 bg-green-400/10 px-2 py-1 rounded"></span></span>
                 <button onclick="logout()" class="text-xs text-red-500 font-bold uppercase">Logout</button>
             </div>
         </div>
 
-        <h1 class="hero-text mb-4">You're<br><span class="text-pink-500">never</span><br>alone.</h1>
+        <h1 class="hero-text mb-4 uppercase">You're<br><span class="text-pink-500">never</span><br>alone.</h1>
         <p class="text-gray-400 text-sm mb-12">Talk to a real stranger. No login. No judgment.</p>
 
-        <div class="space-y-3">
-            <button onclick="findChat()" class="w-full btn-gradient p-5 rounded-2xl font-bold flex justify-between items-center group">
+        <div class="space-y-4">
+            <button onclick="findChat()" class="w-full btn-gradient p-6 rounded-2xl font-bold flex justify-between items-center group">
                 Start Chatting <span class="group-hover:translate-x-1 transition-transform">→</span>
             </button>
-            <button onclick="showHistory()" class="w-full glass-panel p-5 rounded-2xl font-bold flex justify-between items-center">
-                Chat History <span>→</span>
+            <button class="w-full glass-panel p-6 rounded-2xl font-bold flex justify-between items-center">
+                <span>💬 Chat History</span> <span>→</span>
             </button>
-            <button class="w-full glass-panel p-5 rounded-2xl font-bold flex justify-between items-center opacity-50">
-                Online Users <span>→</span>
+            <button class="w-full glass-panel p-6 rounded-2xl font-bold flex justify-between items-center">
+                <span>👥 Online Users</span> <span>→</span>
             </button>
         </div>
 
-        <div class="mt-auto glass-panel p-6 rounded-[2rem]">
+        <div class="mt-auto glass-panel p-6 rounded-[2rem] border-pink-500/20">
             <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Sponsored</p>
-            <h3 class="font-bold">Your Brand Here</h3>
+            <h3 class="font-bold text-white">Your Brand Here</h3>
             <p class="text-xs text-gray-400">Reach thousands of real people daily</p>
         </div>
     </div>
 
-    <div id="chat-screen" class="hidden flex flex-col h-full fixed inset-0 bg-[#0a0514] p-6">
+    <div id="chat-screen" class="hidden fixed inset-0 bg-[#0a0514] p-6 flex flex-col">
         <div class="flex justify-between items-center mb-6">
-            <h2 class="text-xl font-black italic">Not Alone</h2>
-            <div class="glass-panel px-4 py-2 rounded-full text-[10px] font-bold text-purple-400">
-                Chatting with: <span id="peer-name-display"></span>
+            <h2 class="text-xl font-black italic text-blue-500">Not Alone</h2>
+            <div class="glass-panel px-4 py-2 rounded-full text-[10px] font-bold text-purple-400 uppercase">
+                Stranger: <span id="peer-name"></span>
             </div>
         </div>
-        <div id="messages" class="flex-1 overflow-y-auto mb-4 space-y-2"></div>
-        <div id="chat-end-btns" class="hidden text-center p-4">
-            <button onclick="location.reload()" class="btn-gradient px-8 py-3 rounded-full font-bold">Find New Friend</button>
-        </div>
-        <div id="msg-input-area" class="flex gap-2">
+        <div id="messages" class="flex-1 overflow-y-auto mb-4 space-y-4"></div>
+        <div class="flex gap-2">
             <button onclick="location.reload()" class="glass-panel px-4 rounded-xl text-xs font-bold text-red-500">Skip</button>
             <input id="msg-input" placeholder="Type a message..." class="flex-1 bg-white/5 p-4 rounded-xl outline-none" onkeypress="if(event.key==='Enter') sendMsg()">
             <button onclick="sendMsg()" class="btn-gradient px-6 rounded-xl font-bold">Send</button>
@@ -218,15 +202,7 @@
 
     <div id="loading-screen" class="hidden flex-1 flex flex-col items-center justify-center">
         <div class="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p class="text-xs font-bold tracking-widest">CONNECTING...</p>
-    </div>
-
-    <div id="history-screen" class="hidden flex-1 flex flex-col">
-        <div class="flex items-center gap-4 mb-8">
-            <button onclick="location.reload()" class="text-2xl">←</button>
-            <h1 class="text-2xl font-black">Chat History</h1>
-        </div>
-        <div id="history-list" class="flex-1 overflow-y-auto"></div>
+        <p class="text-xs font-bold tracking-widest">LOOKING FOR A STRANGER...</p>
     </div>
 
 </body>
