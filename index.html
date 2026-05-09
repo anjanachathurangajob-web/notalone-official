@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Not Alone - Final Verified</title>
+    <title>Not Alone - Admin Delete Fixed</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         html, body { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background: #0a0514; color: white; font-family: sans-serif; }
@@ -160,7 +160,6 @@
             const p = document.getElementById('reg-pass').value.trim();
             if(!u || !p) return alert("Fill all! / සියල්ල පුරවන්න!");
             await set(ref(db, `users/${u}`), { password: p, approved: false, expiry: 0 });
-            // UPDATED WHATSAPP MESSAGE (STRICTLY AS REQUESTED)
             const waMsg = `Hi Admin, I just registered on Not Alone.\nUsername: ${u}\nPlease approve my account.`;
             window.location.href = `https://wa.me/${MY_WHATSAPP}?text=${encodeURIComponent(waMsg)}`;
         };
@@ -246,15 +245,21 @@
                                 <p class="font-bold ${isApproved ? 'text-emerald-400' : 'text-pink-500'}">${u}</p>
                                 <p class="text-[8px] opacity-40">${isApproved ? 'APPROVED' : 'PENDING'}</p>
                             </div>
-                            <button onclick="approve('${u}')" class="${isApproved ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-600 text-white'} px-4 py-2 rounded-xl text-[10px] font-black uppercase">
-                                ${isApproved ? 'Extend' : 'Approve'}
-                            </button>
+                            <div class="flex gap-2">
+                                <button onclick="approve('${u}')" class="${isApproved ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-600 text-white'} px-3 py-2 rounded-xl text-[10px] font-black uppercase">
+                                    ${isApproved ? 'Extend' : 'Approve'}
+                                </button>
+                                <button onclick="deleteUser('${u}')" class="bg-red-500/20 text-red-500 border border-red-500/30 px-3 py-2 rounded-xl text-[10px] font-black uppercase">
+                                    Del
+                                </button>
+                            </div>
                         </div>`;
                     });
                 }
             });
         }
         window.approve = (u) => update(ref(db, `users/${u}`), { approved: true, expiry: Date.now() + 2592000000 });
+        window.deleteUser = (u) => { if(confirm(`Delete ${u}?`)) remove(ref(db, `users/${u}`)); };
 
         window.onload = async () => {
             if(myUser) {
