@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Not Alone - Clean Session</title>
+    <title>Not Alone - Stable Voice</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
@@ -12,6 +12,8 @@
         .btn-gradient { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
         .chat-bubble-me { background: #8b5cf6; border-radius: 18px 18px 4px 18px; }
         .chat-bubble-peer { background: #2d2d3d; border-radius: 18px 18px 18px 4px; }
+        .animate-pulse-red { animation: pulse 1.5s infinite; color: #ef4444; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
 <body class="p-6 h-screen flex flex-col">
@@ -31,32 +33,27 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-        const CLOUD_NAME = "dgxpyzt7c";
+        const CLOUD_NAME = "dgxpyzt7c"; //
         const UPLOAD_PRESET = "notalone_preset";
 
         let myUser = localStorage.getItem('chatUser');
         let currentChatId = null;
         let mediaRecorder;
         let audioChunks = [];
-        let chatListener = null;
 
-        // --- SESSION CLEANUP ---
-        window.exitChat = async () => {
-            if(myUser) {
-                await update(ref(db, `users/${myUser}`), { currentChat: null, chattingWith: null });
-                if(currentChatId) off(ref(db, `messages/${currentChatId}`));
-            }
-            location.reload();
-        };
-
+        // --- SESSION MANAGEMENT ---
         window.logout = () => {
             localStorage.removeItem('chatUser');
             location.reload();
         };
 
+        window.exitChat = async () => {
+            if(myUser) await update(ref(db, `users/${myUser}`), { currentChat: null, chattingWith: null });
+            location.reload();
+        };
+
         // --- VOICE LOGIC ---
         window.uploadVoice = async (blob) => {
-            if(!currentChatId) return;
             const formData = new FormData();
             formData.append('file', blob);
             formData.append('upload_preset', UPLOAD_PRESET);
@@ -73,29 +70,32 @@
                 mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
                 mediaRecorder.onstop = () => uploadVoice(new Blob(audioChunks, { type: 'audio/webm' }));
                 mediaRecorder.start();
-                document.getElementById('mic-btn').classList.add('text-red-500', 'animate-pulse');
+                document.getElementById('mic-btn').classList.add('animate-pulse-red');
             } else {
                 mediaRecorder.stop();
-                document.getElementById('mic-btn').classList.remove('text-red-500', 'animate-pulse');
+                document.getElementById('mic-btn').classList.remove('animate-pulse-red');
             }
         };
 
-        // --- CHAT CORE ---
+        // --- CHAT LOGIC ---
         function openChatUI(chatId, peer) {
             currentChatId = chatId;
             document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
             document.getElementById('chat-screen').classList.remove('hidden');
             document.getElementById('peer-name').innerText = peer;
 
-            chatListener = onValue(ref(db, `messages/${chatId}`), (s) => {
+            onValue(ref(db, `messages/${chatId}`), (s) => {
                 const b = document.getElementById('messages');
                 b.innerHTML = "";
                 if(s.exists()){
                     const now = Date.now();
                     Object.entries(s.val()).forEach(([key, m]) => {
+                        // Text messages: 3 days
                         if(m.type === 'text' && (now - m.ts > 259200000)) { remove(ref(db, `messages/${chatId}/${key}`)); return; }
+                        
                         const isMe = m.u === myUser;
                         let content = `<p class="text-sm">${m.t}</p>`;
+                        // Voice: Delete after play
                         if(m.type === 'audio') content = `<audio src="${m.t}" controls class="h-8" onended="remove(ref(db,'messages/${chatId}/${key}'))"></audio>`;
                         
                         b.innerHTML += `<div class="flex ${isMe?'justify-end':'justify-start'} mb-4">
@@ -108,9 +108,6 @@
         }
 
         window.startChatting = async () => {
-            // "Find Someone" එබූ විගස පරණ දත්ත මකා දැමීම
-            await update(ref(db, `users/${myUser}`), { currentChat: null, chattingWith: null });
-            
             document.getElementById('main-dashboard').classList.add('hidden');
             document.getElementById('loading-screen').classList.remove('hidden');
 
@@ -141,19 +138,26 @@
             const u = document.getElementById('username').value.trim();
             const p = document.getElementById('password').value.trim();
             const s = await get(ref(db, `users/${u}`));
-            if(s.exists() && s.val().password === p) { localStorage.setItem('chatUser', u); location.reload(); }
-            else alert("Error");
+            if(s.exists() && s.val().password === p) { 
+                localStorage.setItem('chatUser', u); 
+                location.reload(); 
+            } else alert("Error");
         };
 
-        window.onload = () => {
-            if(!myUser) document.getElementById('login-screen').classList.remove('hidden');
-            else {
+        window.onload = async () => {
+            if(!myUser) {
+                document.getElementById('login-screen').classList.remove('hidden');
+            } else {
+                // IMPORTANT: Reset session on load to prevent auto-joining old chats
+                await update(ref(db, `users/${myUser}`), { currentChat: null, chattingWith: null });
+                
                 document.getElementById('main-dashboard').classList.remove('hidden');
-                // වැදගත්: මෙහිදී auto-load වීම නැවැත්වීමට currentChat එක check කරන්නේ නැත.
-                // ලොජික් එක පාලනය වන්නේ startChatting හරහා පමණි.
+                document.getElementById('user-tag').innerText = myUser;
+                
                 onValue(ref(db, `users/${myUser}`), (s) => {
                     const data = s.val();
-                    if(data?.currentChat && !currentChatId) {
+                    // Only open chat if the user is actively searching
+                    if(data?.currentChat && !document.getElementById('loading-screen').classList.contains('hidden')) {
                         openChatUI(data.currentChat, data.chattingWith);
                     }
                 });
@@ -161,35 +165,37 @@
         };
     </script>
 
-    <div id="login-screen" class="screen hidden flex-1 flex flex-col justify-center max-w-sm mx-auto text-center">
-        <h1 class="text-4xl font-black italic text-blue-500 mb-8 uppercase">Not Alone</h1>
+    <!-- UI SCREENS -->
+    <div id="login-screen" class="screen hidden flex-1 flex flex-col justify-center max-w-sm mx-auto">
+        <h1 class="text-4xl font-black italic text-blue-500 mb-8 text-center uppercase">Not Alone</h1>
         <div class="glass-panel p-8 rounded-[2.5rem]">
             <input id="username" placeholder="Username" class="w-full bg-white/5 p-4 rounded-2xl mb-4 outline-none border border-white/5">
             <input id="password" type="password" placeholder="Password" class="w-full bg-white/5 p-4 rounded-2xl mb-6 outline-none border border-white/5">
-            <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-black uppercase tracking-widest">Login</button>
+            <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-black uppercase">Login</button>
         </div>
     </div>
 
     <div id="main-dashboard" class="screen hidden flex-1 flex flex-col justify-center">
         <div class="flex justify-between items-start mb-12">
             <h1 class="text-6xl font-black italic uppercase leading-[0.85]">Voice<br><span class="text-pink-500">Only.</span></h1>
-            <button onclick="logout()" class="text-[10px] border border-white/20 px-4 py-2 rounded-full uppercase">Logout</button>
+            <button onclick="logout()" class="text-[10px] border border-white/20 px-4 py-2 rounded-full uppercase font-bold">Logout</button>
         </div>
-        <button onclick="startChatting()" class="w-full btn-gradient p-10 rounded-[2.5rem] font-black text-2xl shadow-2xl uppercase tracking-tighter">Find Someone →</button>
+        <p class="text-[10px] opacity-40 mb-4 italic uppercase">Welcome, <span id="user-tag" class="text-blue-400"></span></p>
+        <button onclick="startChatting()" class="w-full btn-gradient p-10 rounded-[2.5rem] font-black text-2xl shadow-2xl uppercase">Find Someone →</button>
     </div>
 
     <div id="chat-screen" class="screen hidden fixed inset-0 bg-[#0a0514] p-6 flex flex-col z-50">
         <div class="flex justify-between items-center mb-6">
             <h2 class="text-xl font-black italic text-blue-500 uppercase">Not Alone</h2>
             <div class="flex items-center gap-3">
-                <span id="peer-name" class="text-[10px] font-bold text-purple-400 uppercase tracking-widest"></span>
-                <button onclick="exitChat()" class="text-[9px] bg-red-500/20 text-red-500 px-3 py-1 rounded-full uppercase font-bold">End Chat</button>
+                <span id="peer-name" class="text-[10px] font-bold text-purple-400 uppercase"></span>
+                <button onclick="exitChat()" class="text-[9px] bg-red-500/20 text-red-500 px-3 py-1 rounded-full uppercase font-bold">Exit Chat</button>
             </div>
         </div>
         <div id="messages" class="flex-1 overflow-y-auto mb-6 space-y-4"></div>
         <div class="glass-panel p-2 rounded-[2.5rem] shadow-2xl">
             <div class="flex justify-center py-3 border-b border-white/5 mb-1">
-                <button id="mic-btn" onclick="toggleRecord()" class="text-3xl p-4 bg-white/5 rounded-full transition-all active:scale-90">🎙️</button>
+                <button id="mic-btn" onclick="toggleRecord()" class="text-3xl p-4 bg-white/5 rounded-full transition-transform active:scale-90">🎙️</button>
             </div>
             <div class="flex gap-2 p-1">
                 <input id="msg-input" placeholder="Say something..." class="flex-1 bg-transparent p-4 outline-none text-sm" onkeypress="if(event.key==='Enter') sendMsg()">
@@ -199,8 +205,8 @@
     </div>
 
     <div id="loading-screen" class="screen hidden flex-1 flex flex-col items-center justify-center">
-        <div class="w-14 h-14 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p class="text-xs uppercase opacity-50 tracking-widest animate-pulse">Searching for a voice...</p>
+        <div class="w-14 h-14 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4 shadow-[0_0_20px_rgba(236,72,153,0.3)]"></div>
+        <p class="text-[10px] uppercase tracking-widest opacity-50 animate-pulse">Searching for a voice...</p>
         <button onclick="exitChat()" class="mt-12 text-[10px] opacity-30 underline uppercase">Cancel</button>
     </div>
 
