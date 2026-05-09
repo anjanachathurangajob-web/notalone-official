@@ -3,21 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Not Alone - Official</title>
+    <title>Not Alone - Chat Official</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { font-family: sans-serif; background: #0a0514; color: white; overflow-x: hidden; }
+        body { font-family: sans-serif; background: #0a0514; color: white; overflow: hidden; }
         .glass-panel { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
         .btn-gradient { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
         .online-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; }
         .approved-bg { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); }
+        #chat-messages::-webkit-scrollbar { width: 0; }
     </style>
 </head>
 <body class="p-6 h-screen flex flex-col">
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, get, update, onDisconnect, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, get, update, onDisconnect, remove, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAtN7nwhc1XrYa8mGNLMQlKicFj-f5yG0k",
@@ -30,16 +31,16 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         
-        // --- FIXED DATA ---
         const ADMIN_USER = "admin";
         const ADMIN_PW = "913132386V";
         const MY_WHATSAPP = "94773364401";
 
         let myUser = localStorage.getItem('chatUser');
+        let currentRoom = null;
 
         // Online Tracking
         if(myUser) {
-            set(ref(db, `online/${myUser}`), true);
+            set(ref(db, `online/${myUser}`), { status: "idle" });
             onDisconnect(ref(db, `online/${myUser}`)).remove();
         }
         onValue(ref(db, 'online'), (s) => {
@@ -47,128 +48,173 @@
             document.querySelectorAll('.online-count').forEach(el => el.innerText = `${count} Online`);
         });
 
-        // Register Logic with Username Check
+        // Registration & Login
         window.handleRegister = async () => {
             const u = document.getElementById('reg-user').value.trim();
             const p = document.getElementById('reg-pass').value.trim();
-            
-            if(!u || !p) return alert("Please fill all fields!");
-
-            const checkUser = await get(ref(db, `users/${u}`));
-            if(checkUser.exists()) {
-                return alert("Username already used. Please use another one!");
-            }
-
-            await set(ref(db, `users/${u}`), { 
-                password: p, 
-                approved: false, 
-                expiry: 0 
-            });
-            
-            const msg = `Hi Admin, I just registered on Not Alone.\nUsername: ${u}\nPlease approve my account.`;
-            window.open(`https://wa.me/${MY_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
-            alert("Registration requested! Wait for Admin Approval.");
+            if(!u || !p) return alert("Fill all fields!");
+            const check = await get(ref(db, `users/${u}`));
+            if(check.exists()) return alert("Username taken!");
+            await set(ref(db, `users/${u}`), { password: p, approved: false, expiry: 0 });
+            window.open(`https://wa.me/${MY_WHATSAPP}?text=Approve: ${u}`, '_blank');
             location.reload();
         };
 
-        // Login Logic
         window.handleLogin = async () => {
             const u = document.getElementById('login-user').value.trim();
             const p = document.getElementById('login-pass').value.trim();
-            
             if(u === ADMIN_USER && p === ADMIN_PW) {
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('admin-panel').classList.remove('hidden');
-                loadAdminData();
-                return;
+                loadAdminData(); return;
             }
-
             const s = await get(ref(db, `users/${u}`));
             if(s.exists() && s.val().password === p) {
-                const data = s.val();
-                if(data.approved && Date.now() < data.expiry) {
-                    localStorage.setItem('chatUser', u);
-                    location.reload();
-                } else {
-                    alert("Account pending approval or expired. Contact Admin.");
+                if(s.val().approved && Date.now() < s.val().expiry) {
+                    localStorage.setItem('chatUser', u); location.reload();
+                } else alert("Pending or Expired!");
+            } else alert("Invalid Login!");
+        };
+
+        // --- MATCHING LOGIC ---
+        window.findStranger = async () => {
+            document.getElementById('main-dashboard').classList.add('hidden');
+            document.getElementById('searching-ui').classList.remove('hidden');
+            
+            update(ref(db, `online/${myUser}`), { status: "searching" });
+
+            const snapshot = await get(ref(db, 'online'));
+            const users = snapshot.val();
+            let partner = null;
+
+            for (let u in users) {
+                if (u !== myUser && users[u].status === "searching") {
+                    partner = u; break;
                 }
-            } else { alert("Invalid Username or Password!"); }
-        };
+            }
 
-        // Admin: Approve
-        window.approveUser = async (u) => {
-            const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-            await update(ref(db, `users/${u}`), { 
-                approved: true, 
-                expiry: Date.now() + thirtyDays 
-            });
-            alert(u + " approved for 30 days!");
-        };
-
-        // Admin: Delete
-        window.deleteUser = async (u) => {
-            if(confirm(`Delete ${u}? User must re-register.`)) {
-                await remove(ref(db, `users/${u}`));
+            if (partner) {
+                const roomId = [myUser, partner].sort().join("_");
+                currentRoom = roomId;
+                await set(ref(db, `rooms/${roomId}`), { users: [myUser, partner], lastMsg: "" });
+                await update(ref(db, `online/${myUser}`), { status: "chatting", room: roomId });
+                await update(ref(db, `online/${partner}`), { status: "chatting", room: roomId });
+                startChat(roomId);
+            } else {
+                onValue(ref(db, `online/${myUser}/room`), (s) => {
+                    if (s.exists()) {
+                        currentRoom = s.val();
+                        startChat(currentRoom);
+                    }
+                });
             }
         };
 
-        // Load Admin Panel - Fixed Case Sensitivity Display
+        function startChat(roomId) {
+            document.getElementById('searching-ui').classList.add('hidden');
+            document.getElementById('chat-screen').classList.remove('hidden');
+            const msgBox = document.getElementById('chat-messages');
+            msgBox.innerHTML = "";
+
+            onValue(ref(db, `rooms/${roomId}/messages`), (s) => {
+                msgBox.innerHTML = "";
+                if(s.exists()) {
+                    Object.values(s.val()).forEach(m => {
+                        const isMe = m.sender === myUser;
+                        msgBox.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-2">
+                            <div class="${isMe ? 'bg-pink-600' : 'bg-white/10'} p-3 rounded-2xl max-w-[80%] text-sm">
+                                ${m.text}
+                            </div>
+                        </div>`;
+                    });
+                    msgBox.scrollTop = msgBox.scrollHeight;
+                }
+            });
+        }
+
+        window.sendMessage = () => {
+            const input = document.getElementById('msg-input');
+            if(!input.value.trim() || !currentRoom) return;
+            push(ref(db, `rooms/${currentRoom}/messages`), {
+                sender: myUser,
+                text: input.value.trim(),
+                time: Date.now()
+            });
+            input.value = "";
+        };
+
+        window.endChat = async () => {
+            if(currentRoom) {
+                await remove(ref(db, `rooms/${currentRoom}`));
+                await update(ref(db, `online/${myUser}`), { status: "idle", room: null });
+                location.reload();
+            }
+        };
+
+        // Admin
         function loadAdminData() {
             onValue(ref(db, 'users'), (s) => {
                 const list = document.getElementById('user-list');
                 list.innerHTML = "";
-                if(s.exists()){
-                    Object.entries(s.val()).forEach(([u, d]) => {
-                        const isApproved = d.approved && Date.now() < d.expiry;
-                        list.innerHTML += `
-                            <div class="p-4 rounded-xl mb-3 flex justify-between items-center ${isApproved ? 'approved-bg' : 'glass-panel'}">
-                                <div>
-                                    <p class="font-bold text-sm ${isApproved ? 'text-emerald-400' : 'text-white'}">${u}</p>
-                                    <p class="text-[10px] opacity-70">PW: ${d.password}</p>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-tighter">Approve</button>
-                                    <button onclick="deleteUser('${u}')" class="bg-red-600 px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-tighter">Del</button>
-                                </div>
-                            </div>`;
-                    });
-                }
+                Object.entries(s.val()).forEach(([u, d]) => {
+                    const isApproved = d.approved && Date.now() < d.expiry;
+                    list.innerHTML += `<div class="p-4 rounded-xl mb-3 flex justify-between items-center ${isApproved ? 'approved-bg' : 'glass-panel'}">
+                        <div><p class="font-bold text-sm">${u}</p><p class="text-[9px] opacity-60 italic">PW: ${d.password}</p></div>
+                        <div class="flex gap-2">
+                            <button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-2 rounded-lg text-[9px] font-black">Approve</button>
+                            <button onclick="deleteUser('${u}')" class="bg-red-600 px-3 py-2 rounded-lg text-[9px] font-black">Del</button>
+                        </div>
+                    </div>`;
+                });
             });
         }
+        window.approveUser = (u) => update(ref(db, `users/${u}`), { approved: true, expiry: Date.now() + (30*24*60*60*1000) });
+        window.deleteUser = (u) => remove(ref(db, `users/${u}`));
 
         window.onload = async () => {
             if(myUser) {
                 const s = await get(ref(db, `users/${myUser}`));
                 if(s.exists()) {
-                    const data = s.val();
-                    const diff = data.expiry - Date.now();
-                    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+                    const d = s.val();
+                    const days = Math.ceil((d.expiry - Date.now()) / 86400000);
                     document.getElementById('days-tag').innerText = (days > 0 ? days : 0) + " Days Remaining";
                     document.getElementById('main-dashboard').classList.remove('hidden');
-                } else {
-                    localStorage.removeItem('chatUser');
-                    location.reload();
-                }
-            } else { document.getElementById('login-screen').classList.remove('hidden'); }
+                } else { localStorage.removeItem('chatUser'); location.reload(); }
+            } else document.getElementById('login-screen').classList.remove('hidden');
         };
-        
-        window.logout = () => { localStorage.removeItem('chatUser'); location.reload(); };
     </script>
 
+    <div id="searching-ui" class="hidden flex-1 flex flex-col justify-center items-center text-center">
+        <div class="w-20 h-20 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+        <h2 class="text-xl font-bold animate-pulse">Finding a Stranger...</h2>
+        <button onclick="location.reload()" class="mt-8 text-xs opacity-50 underline">Cancel</button>
+    </div>
+
+    <div id="chat-screen" class="hidden flex-1 flex flex-col">
+        <div class="flex justify-between items-center pb-4 border-b border-white/10">
+            <span class="text-emerald-400 font-bold text-xs uppercase italic tracking-widest">Connected</span>
+            <button onclick="endChat()" class="bg-red-600/20 text-red-500 px-4 py-1 rounded-full text-[10px] font-bold uppercase">End Chat</button>
+        </div>
+        <div id="chat-messages" class="flex-1 overflow-y-auto py-4 space-y-4 px-2"></div>
+        <div class="pt-4 flex gap-2">
+            <input id="msg-input" placeholder="Type a message..." class="flex-1 bg-white/5 p-4 rounded-2xl outline-none text-sm border border-white/10">
+            <button onclick="sendMessage()" class="btn-gradient px-6 rounded-2xl font-bold">SEND</button>
+        </div>
+    </div>
+
     <div id="login-screen" class="hidden flex-1 flex flex-col justify-center max-w-sm mx-auto">
-        <h1 class="text-4xl font-black text-pink-500 mb-8 text-center uppercase italic">NOT ALONE</h1>
+        <h1 class="text-4xl font-black text-pink-500 mb-8 text-center italic">NOT ALONE</h1>
         <div class="glass-panel p-8 rounded-[2rem]">
             <div id="login-form">
-                <input id="login-user" placeholder="Username" class="w-full bg-white/5 p-4 mb-4 rounded-2xl outline-none border border-white/5 text-sm">
-                <input id="login-pass" type="password" placeholder="Password" class="w-full bg-white/5 p-4 mb-6 rounded-2xl outline-none border border-white/5 text-sm">
-                <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-xl font-bold uppercase">Login</button>
-                <p class="text-center text-[10px] opacity-40 mt-4 uppercase cursor-pointer" onclick="document.getElementById('login-form').classList.add('hidden'); document.getElementById('reg-form').classList.remove('hidden');">New user? Register</p>
+                <input id="login-user" placeholder="Username" class="w-full bg-white/5 p-4 mb-4 rounded-2xl outline-none text-sm border border-white/5">
+                <input id="login-pass" type="password" placeholder="Password" class="w-full bg-white/5 p-4 mb-6 rounded-2xl outline-none text-sm border border-white/5">
+                <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-bold uppercase">Login</button>
+                <p class="text-center text-[10px] opacity-40 mt-4 uppercase cursor-pointer" onclick="this.parentElement.classList.add('hidden'); document.getElementById('reg-form').classList.remove('hidden');">Register</p>
             </div>
             <div id="reg-form" class="hidden">
-                <input id="reg-user" placeholder="Choose Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none border border-white/5 text-sm">
-                <input id="reg-pass" placeholder="Choose Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none border border-white/5 text-sm">
-                <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-xl font-bold uppercase">Register</button>
-                <p class="text-center text-[10px] opacity-40 mt-4 uppercase cursor-pointer" onclick="document.getElementById('reg-form').classList.add('hidden'); document.getElementById('login-form').classList.remove('hidden');">Back to Login</p>
+                <input id="reg-user" placeholder="New Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm border border-white/5">
+                <input id="reg-pass" placeholder="New Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm border border-white/5">
+                <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase">Register</button>
             </div>
         </div>
     </div>
@@ -177,21 +223,17 @@
         <div class="flex justify-between items-center mb-10">
             <h1 class="text-5xl font-black italic leading-[0.8]">NOT<br><span class="text-pink-500 uppercase">ALONE.</span></h1>
             <div class="flex flex-col items-end gap-2">
-                <button onclick="logout()" class="text-[9px] border border-white/20 px-3 py-1 rounded-full uppercase font-bold hover:bg-white/5">Logout</button>
                 <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
                     <div class="online-dot animate-pulse"></div><span class="online-count text-[10px] font-bold text-emerald-400 uppercase">0 Online</span>
                 </div>
             </div>
         </div>
         <p id="days-tag" class="text-emerald-400 font-black mb-8 uppercase text-[10px] bg-emerald-500/10 self-start px-4 py-1 rounded-full border border-emerald-500/20">-- Days Remaining</p>
-        <button class="w-full btn-gradient p-12 rounded-[2.5rem] font-black text-2xl uppercase shadow-2xl active:scale-95 transition-all">Find Stranger →</button>
+        <button onclick="findStranger()" class="w-full btn-gradient p-12 rounded-[2.5rem] font-black text-2xl uppercase shadow-2xl active:scale-95 transition-all">Find Stranger →</button>
     </div>
 
     <div id="admin-panel" class="hidden flex-1 flex flex-col">
-        <div class="flex justify-between items-center mb-6">
-            <h2 class="text-2xl font-black text-blue-500 uppercase italic">Admin Panel</h2>
-            <button onclick="location.reload()" class="bg-white/10 px-4 py-1 rounded-full text-[9px] font-bold uppercase">Exit</button>
-        </div>
+        <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-black text-blue-500 uppercase italic">Admin</h2><button onclick="location.reload()" class="bg-white/10 px-4 py-1 rounded-full text-[9px] font-bold uppercase">Exit</button></div>
         <div id="user-list" class="flex-1 overflow-y-auto pb-10"></div>
     </div>
 
