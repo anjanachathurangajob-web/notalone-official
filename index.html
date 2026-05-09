@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Not Alone - Chat Official</title>
+    <title>Not Alone - Secure Voice Chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: sans-serif; background: #0a0514; color: white; overflow: hidden; }
         .glass-panel { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
         .btn-gradient { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
         .online-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; }
-        .approved-bg { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); }
         #chat-messages::-webkit-scrollbar { width: 0; }
+        .recording { animation: pulse 1.5s infinite; background: #ef4444 !important; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body class="p-6 h-screen flex flex-col">
@@ -37,28 +38,18 @@
 
         let myUser = localStorage.getItem('chatUser');
         let currentRoom = null;
+        let mediaRecorder;
+        let audioChunks = [];
 
-        // Online Tracking
         if(myUser) {
             set(ref(db, `online/${myUser}`), { status: "idle" });
             onDisconnect(ref(db, `online/${myUser}`)).remove();
         }
+
         onValue(ref(db, 'online'), (s) => {
             const count = s.exists() ? Object.keys(s.val()).length : 0;
             document.querySelectorAll('.online-count').forEach(el => el.innerText = `${count} Online`);
         });
-
-        // Registration & Login
-        window.handleRegister = async () => {
-            const u = document.getElementById('reg-user').value.trim();
-            const p = document.getElementById('reg-pass').value.trim();
-            if(!u || !p) return alert("Fill all fields!");
-            const check = await get(ref(db, `users/${u}`));
-            if(check.exists()) return alert("Username taken!");
-            await set(ref(db, `users/${u}`), { password: p, approved: false, expiry: 0 });
-            window.open(`https://wa.me/${MY_WHATSAPP}?text=Approve: ${u}`, '_blank');
-            location.reload();
-        };
 
         window.handleLogin = async () => {
             const u = document.getElementById('login-user').value.trim();
@@ -72,169 +63,203 @@
             if(s.exists() && s.val().password === p) {
                 if(s.val().approved && Date.now() < s.val().expiry) {
                     localStorage.setItem('chatUser', u); location.reload();
-                } else alert("Pending or Expired!");
-            } else alert("Invalid Login!");
+                } else alert("ගිණුම අනුමත කර නැත හෝ කාලය අවසන් වී ඇත.");
+            } else alert("පිවිසීම අසාර්ථකයි!");
         };
 
-        // --- MATCHING LOGIC ---
+        window.handleRegister = async () => {
+            const u = document.getElementById('reg-user').value.trim();
+            const p = document.getElementById('reg-pass').value.trim();
+            const check = await get(ref(db, `users/${u}`));
+            if(check.exists()) return alert("මෙම නම දැනටමත් භාවිතයේ ඇත.");
+            await set(ref(db, `users/${u}`), { password: p, approved: false, expiry: 0 });
+            window.open(`https://wa.me/${MY_WHATSAPP}?text=Approve User: ${u}`);
+            location.reload();
+        };
+
         window.findStranger = async () => {
             document.getElementById('main-dashboard').classList.add('hidden');
             document.getElementById('searching-ui').classList.remove('hidden');
-            
             update(ref(db, `online/${myUser}`), { status: "searching" });
 
             const snapshot = await get(ref(db, 'online'));
             const users = snapshot.val();
-            let partner = null;
-
-            for (let u in users) {
-                if (u !== myUser && users[u].status === "searching") {
-                    partner = u; break;
-                }
-            }
+            let partner = Object.keys(users || {}).find(u => u !== myUser && users[u].status === "searching");
 
             if (partner) {
                 const roomId = [myUser, partner].sort().join("_");
-                currentRoom = roomId;
-                await set(ref(db, `rooms/${roomId}`), { users: [myUser, partner], lastMsg: "" });
+                await set(ref(db, `rooms/${roomId}`), { users: [myUser, partner], activeUsers: [myUser, partner] });
                 await update(ref(db, `online/${myUser}`), { status: "chatting", room: roomId });
                 await update(ref(db, `online/${partner}`), { status: "chatting", room: roomId });
-                startChat(roomId);
             } else {
-                onValue(ref(db, `online/${myUser}/room`), (s) => {
-                    if (s.exists()) {
-                        currentRoom = s.val();
-                        startChat(currentRoom);
-                    }
-                });
+                onValue(ref(db, `online/${myUser}/room`), (s) => { if(s.exists()) startChat(s.val()); });
             }
         };
 
+        onValue(ref(db, `online/${myUser}/status`), (s) => { 
+            if(s.val() === "chatting") { 
+                get(ref(db, `online/${myUser}/room`)).then(r => { if(r.exists()) startChat(r.val()); }); 
+            } 
+        });
+
         function startChat(roomId) {
+            currentRoom = roomId;
             document.getElementById('searching-ui').classList.add('hidden');
             document.getElementById('chat-screen').classList.remove('hidden');
-            const msgBox = document.getElementById('chat-messages');
-            msgBox.innerHTML = "";
-
+            
             onValue(ref(db, `rooms/${roomId}/messages`), (s) => {
+                const msgBox = document.getElementById('chat-messages');
                 msgBox.innerHTML = "";
                 if(s.exists()) {
                     Object.values(s.val()).forEach(m => {
                         const isMe = m.sender === myUser;
+                        let content = m.type === 'text' ? m.text : `<audio controls class="h-8 w-40"><source src="${m.audio}" type="audio/webm"></audio>`;
                         msgBox.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} mb-2">
-                            <div class="${isMe ? 'bg-pink-600' : 'bg-white/10'} p-3 rounded-2xl max-w-[80%] text-sm">
-                                ${m.text}
-                            </div>
+                            <div class="${isMe ? 'bg-pink-600' : 'bg-white/10'} p-3 rounded-2xl max-w-[80%] text-sm">${content}</div>
                         </div>`;
                     });
                     msgBox.scrollTop = msgBox.scrollHeight;
                 }
             });
+
+            onValue(ref(db, `rooms/${roomId}/activeUsers`), (s) => {
+                if(!s.exists()) { location.reload(); }
+            });
         }
 
-        window.sendMessage = () => {
-            const input = document.getElementById('msg-input');
-            if(!input.value.trim() || !currentRoom) return;
-            push(ref(db, `rooms/${currentRoom}/messages`), {
-                sender: myUser,
-                text: input.value.trim(),
-                time: Date.now()
-            });
-            input.value = "";
-        };
-
-        window.endChat = async () => {
-            if(currentRoom) {
-                await remove(ref(db, `rooms/${currentRoom}`));
-                await update(ref(db, `online/${myUser}`), { status: "idle", room: null });
-                location.reload();
+        window.toggleRecord = async () => {
+            const btn = document.getElementById('record-btn');
+            if (!mediaRecorder || mediaRecorder.state === "inactive") {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const reader = new FileReader();
+                        reader.readAsDataURL(audioBlob);
+                        reader.onloadend = () => {
+                            push(ref(db, `rooms/${currentRoom}/messages`), {
+                                sender: myUser, type: 'voice', audio: reader.result, time: Date.now()
+                            });
+                        };
+                    };
+                    mediaRecorder.start();
+                    btn.classList.add('recording');
+                    btn.innerText = "STOP";
+                } catch (err) { alert("මයික්‍රොෆෝනය සඳහා අවසර නැත."); }
+            } else {
+                mediaRecorder.stop();
+                btn.classList.remove('recording');
+                btn.innerText = "VOICE";
             }
         };
 
-        // Admin
+        window.sendMsg = () => {
+            const val = document.getElementById('msg-input').value.trim();
+            if(!val) return;
+            push(ref(db, `rooms/${currentRoom}/messages`), { sender: myUser, type: 'text', text: val, time: Date.now() });
+            document.getElementById('msg-input').value = "";
+        };
+
+        window.endChat = async () => {
+            if(!currentRoom) return;
+            const roomRef = ref(db, `rooms/${currentRoom}`);
+            const snapshot = await get(roomRef);
+            if(snapshot.exists()) {
+                let active = snapshot.val().activeUsers || [];
+                active = active.filter(u => u !== myUser);
+                
+                if(active.length === 0) {
+                    await remove(roomRef);
+                } else {
+                    await update(roomRef, { activeUsers: active });
+                }
+            }
+            await update(ref(db, `online/${myUser}`), { status: "idle", room: null });
+            location.reload();
+        };
+
         function loadAdminData() {
             onValue(ref(db, 'users'), (s) => {
-                const list = document.getElementById('user-list');
-                list.innerHTML = "";
-                Object.entries(s.val()).forEach(([u, d]) => {
-                    const isApproved = d.approved && Date.now() < d.expiry;
-                    list.innerHTML += `<div class="p-4 rounded-xl mb-3 flex justify-between items-center ${isApproved ? 'approved-bg' : 'glass-panel'}">
-                        <div><p class="font-bold text-sm">${u}</p><p class="text-[9px] opacity-60 italic">PW: ${d.password}</p></div>
-                        <div class="flex gap-2">
-                            <button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-2 rounded-lg text-[9px] font-black">Approve</button>
-                            <button onclick="deleteUser('${u}')" class="bg-red-600 px-3 py-2 rounded-lg text-[9px] font-black">Del</button>
-                        </div>
-                    </div>`;
-                });
+                const list = document.getElementById('user-list'); list.innerHTML = "";
+                if(s.exists()){
+                    Object.entries(s.val()).forEach(([u, d]) => {
+                        const approved = d.approved && Date.now() < d.expiry;
+                        list.innerHTML += `<div class="p-4 rounded-xl mb-3 flex justify-between items-center ${approved ? 'bg-emerald-500/10 border border-emerald-500/20' : 'glass-panel'}">
+                            <div><p class="font-bold text-sm text-white">${u}</p><p class="text-[9px] opacity-60">PW: ${d.password}</p></div>
+                            <div class="flex gap-2"><button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-1 rounded-lg text-[9px] font-bold">Approve</button>
+                            <button onclick="deleteUser('${u}')" class="bg-red-600 px-3 py-1 rounded-lg text-[9px] font-bold">Del</button></div></div>`;
+                    });
+                }
             });
         }
-        window.approveUser = (u) => update(ref(db, `users/${u}`), { approved: true, expiry: Date.now() + (30*24*60*60*1000) });
+        window.approveUser = (u) => update(ref(db, `users/${u}`), { approved: true, expiry: Date.now() + 2592000000 });
         window.deleteUser = (u) => remove(ref(db, `users/${u}`));
 
         window.onload = async () => {
             if(myUser) {
                 const s = await get(ref(db, `users/${myUser}`));
                 if(s.exists()) {
-                    const d = s.val();
-                    const days = Math.ceil((d.expiry - Date.now()) / 86400000);
+                    const days = Math.ceil((s.val().expiry - Date.now()) / 86400000);
                     document.getElementById('days-tag').innerText = (days > 0 ? days : 0) + " Days Remaining";
                     document.getElementById('main-dashboard').classList.remove('hidden');
-                } else { localStorage.removeItem('chatUser'); location.reload(); }
+                } else { localStorage.clear(); location.reload(); }
             } else document.getElementById('login-screen').classList.remove('hidden');
         };
     </script>
 
     <div id="searching-ui" class="hidden flex-1 flex flex-col justify-center items-center text-center">
-        <div class="w-20 h-20 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-6"></div>
-        <h2 class="text-xl font-bold animate-pulse">Finding a Stranger...</h2>
-        <button onclick="location.reload()" class="mt-8 text-xs opacity-50 underline">Cancel</button>
+        <div class="w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+        <p class="mt-4 font-bold tracking-widest animate-pulse">Stranger කෙනෙකු සොයමින්...</p>
+        <button onclick="location.reload()" class="mt-10 text-[10px] opacity-40 underline uppercase">සෙවීම නවත්වන්න</button>
     </div>
 
     <div id="chat-screen" class="hidden flex-1 flex flex-col">
-        <div class="flex justify-between items-center pb-4 border-b border-white/10">
-            <span class="text-emerald-400 font-bold text-xs uppercase italic tracking-widest">Connected</span>
-            <button onclick="endChat()" class="bg-red-600/20 text-red-500 px-4 py-1 rounded-full text-[10px] font-bold uppercase">End Chat</button>
+        <div class="flex justify-between items-center pb-3 border-b border-white/10">
+            <div class="flex items-center gap-2"><div class="online-dot animate-pulse"></div><span class="text-[10px] font-bold text-emerald-400 uppercase tracking-tighter">සම්බන්ධ වී ඇත</span></div>
+            <button onclick="endChat()" class="bg-red-500/10 text-red-500 px-4 py-1 rounded-full text-[10px] font-bold uppercase border border-red-500/20">Chat එක අවසන් කරන්න</button>
         </div>
-        <div id="chat-messages" class="flex-1 overflow-y-auto py-4 space-y-4 px-2"></div>
-        <div class="pt-4 flex gap-2">
-            <input id="msg-input" placeholder="Type a message..." class="flex-1 bg-white/5 p-4 rounded-2xl outline-none text-sm border border-white/10">
-            <button onclick="sendMessage()" class="btn-gradient px-6 rounded-2xl font-bold">SEND</button>
+        <div id="chat-messages" class="flex-1 overflow-y-auto py-4"></div>
+        <div class="flex gap-2 items-center bg-white/5 p-2 rounded-[2rem]">
+            <button id="record-btn" onclick="toggleRecord()" class="bg-white/10 w-12 h-12 rounded-full flex items-center justify-center text-[8px] font-black uppercase">Voice</button>
+            <input id="msg-input" placeholder="පණිවිඩයක් ලියන්න..." class="flex-1 bg-transparent p-2 outline-none text-sm">
+            <button onclick="sendMsg()" class="btn-gradient w-12 h-12 rounded-full font-black text-[8px]">SEND</button>
         </div>
     </div>
 
     <div id="login-screen" class="hidden flex-1 flex flex-col justify-center max-w-sm mx-auto">
-        <h1 class="text-4xl font-black text-pink-500 mb-8 text-center italic">NOT ALONE</h1>
-        <div class="glass-panel p-8 rounded-[2rem]">
+        <h1 class="text-center text-4xl font-black text-pink-500 mb-8 italic uppercase tracking-tighter">Not Alone</h1>
+        <div class="glass-panel p-8 rounded-[2.5rem]">
             <div id="login-form">
-                <input id="login-user" placeholder="Username" class="w-full bg-white/5 p-4 mb-4 rounded-2xl outline-none text-sm border border-white/5">
-                <input id="login-pass" type="password" placeholder="Password" class="w-full bg-white/5 p-4 mb-6 rounded-2xl outline-none text-sm border border-white/5">
-                <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-bold uppercase">Login</button>
-                <p class="text-center text-[10px] opacity-40 mt-4 uppercase cursor-pointer" onclick="this.parentElement.classList.add('hidden'); document.getElementById('reg-form').classList.remove('hidden');">Register</p>
+                <input id="login-user" placeholder="Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm">
+                <input id="login-pass" type="password" placeholder="Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm">
+                <button onclick="handleLogin()" class="w-full btn-gradient py-4 rounded-2xl font-bold uppercase shadow-lg shadow-pink-500/20">Login</button>
+                <p class="text-center text-[10px] mt-4 opacity-30 uppercase cursor-pointer" onclick="this.parentElement.classList.add('hidden'); document.getElementById('reg-form').classList.remove('hidden')">ලියාපදිංචි වීමට</p>
             </div>
             <div id="reg-form" class="hidden">
-                <input id="reg-user" placeholder="New Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm border border-white/5">
-                <input id="reg-pass" placeholder="New Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm border border-white/5">
+                <input id="reg-user" placeholder="New Username" class="w-full bg-white/5 p-4 mb-3 rounded-2xl outline-none text-sm">
+                <input id="reg-pass" placeholder="New Password" class="w-full bg-white/5 p-4 mb-5 rounded-2xl outline-none text-sm">
                 <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase">Register</button>
             </div>
         </div>
     </div>
 
     <div id="main-dashboard" class="hidden flex-1 flex flex-col justify-center">
-        <div class="flex justify-between items-center mb-10">
-            <h1 class="text-5xl font-black italic leading-[0.8]">NOT<br><span class="text-pink-500 uppercase">ALONE.</span></h1>
-            <div class="flex flex-col items-end gap-2">
-                <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
-                    <div class="online-dot animate-pulse"></div><span class="online-count text-[10px] font-bold text-emerald-400 uppercase">0 Online</span>
-                </div>
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-5xl font-black italic leading-none">NOT<br><span class="text-pink-500 uppercase">ALONE.</span></h1>
+            <div class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
+                <div class="online-dot animate-pulse"></div><span class="online-count text-[10px] text-emerald-400 font-bold uppercase">0 Online</span>
             </div>
         </div>
-        <p id="days-tag" class="text-emerald-400 font-black mb-8 uppercase text-[10px] bg-emerald-500/10 self-start px-4 py-1 rounded-full border border-emerald-500/20">-- Days Remaining</p>
-        <button onclick="findStranger()" class="w-full btn-gradient p-12 rounded-[2.5rem] font-black text-2xl uppercase shadow-2xl active:scale-95 transition-all">Find Stranger →</button>
+        <p id="days-tag" class="text-[9px] bg-emerald-500/10 text-emerald-400 px-4 py-1 rounded-full self-start mb-10 border border-emerald-500/20 font-black uppercase tracking-widest">-- Days Remaining</p>
+        <button onclick="findStranger()" class="btn-gradient p-14 rounded-[3rem] font-black text-2xl uppercase shadow-2xl active:scale-95 transition-all">Find Stranger →</button>
     </div>
 
     <div id="admin-panel" class="hidden flex-1 flex flex-col">
-        <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-black text-blue-500 uppercase italic">Admin</h2><button onclick="location.reload()" class="bg-white/10 px-4 py-1 rounded-full text-[9px] font-bold uppercase">Exit</button></div>
-        <div id="user-list" class="flex-1 overflow-y-auto pb-10"></div>
+        <div class="flex justify-between items-center mb-6"><h2 class="font-black text-blue-500 uppercase italic">Admin Panel</h2><button onclick="location.reload()" class="text-[10px] bg-white/10 px-3 py-1 rounded-full uppercase">Exit</button></div>
+        <div id="user-list" class="flex-1 overflow-y-auto"></div>
     </div>
 
 </body>
