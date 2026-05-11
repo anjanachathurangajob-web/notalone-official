@@ -109,7 +109,7 @@
             <div class="chat-header">
                 <button onclick="logout()" class="text-[8px] text-white/40 uppercase font-bold">Logout</button>
                 <div class="flex flex-col items-center">
-                    <span class="text-[10px] font-black text-pink-500 uppercase">Chatting / පණිවිඩ හුවමාරුව</span>
+                    <span id="stranger-name" class="text-[13px] font-black text-pink-500 uppercase">...</span>
                     <span class="text-[8px] text-emerald-400 font-bold online-count">0 Online</span>
                 </div>
                 <button id="end-btn" onclick="endChat()" class="bg-red-500/20 text-red-500 px-4 py-1 rounded-full text-[9px] font-bold uppercase border border-red-500/30">End Chat</button>
@@ -389,6 +389,10 @@
             document.getElementById('chat-screen').classList.remove('hidden');
             const msgBox = document.getElementById('chat-messages');
             msgBox.innerHTML = '<div class="system-msg">Connected / සම්බන්ධ විය</div>';
+
+            // Show stranger username
+            const strangerName = roomId.split('_').find(u => u !== myUser);
+            document.getElementById('stranger-name').textContent = strangerName || 'Stranger';
 
             setupVoiceButton();
 
