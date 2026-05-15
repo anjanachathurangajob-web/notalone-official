@@ -293,4 +293,203 @@
 
         // ---- Play voice message ----
         window.playVoice = (audioId, btn) => {
-            const audio = document
+            const audio = document.getElementById(audioId);
+            if (!audio) return;
+            if (audio.paused) {
+                audio.play();
+                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+                audio.onended = () => {
+                    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>`;
+                };
+            } else {
+                audio.pause();
+                audio.currentTime = 0;
+                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>`;
+            }
+        };
+
+        // ---- Voice Button: hold to record ----
+        function setupVoiceButton() {
+            const btn = document.getElementById('voice-btn');
+            const overlay = document.getElementById('recording-overlay');
+            const cancelBtn = document.getElementById('cancel-rec-btn');
+            const timerEl = document.getElementById('rec-timer');
+
+            async function startRec() {
+                if (!currentRoom) return;
+                cancelRecording = false;
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    audioChunks = [];
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+                    mediaRecorder.onstop = async () => {
+                        stream.getTracks().forEach(t => t.stop());
+                        if (cancelRecording) return;
+                        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                        // Convert to base64
+                        const reader = new FileReader();
+                        reader.onloadend = async () => {
+                            const base64 = reader.result;
+                            await push(ref(db, `rooms/${currentRoom}/messages`), {
+                                sender: myUser,
+                                type: 'voice',
+                                audio: base64,
+                                duration: recSeconds
+                            });
+                        };
+                        reader.readAsDataURL(blob);
+                    };
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recSeconds = 0;
+                    timerEl.textContent = '0:00';
+                    overlay.classList.remove('hidden');
+                    btn.classList.add('recording');
+                    recTimerInterval = setInterval(() => {
+                        recSeconds++;
+                        timerEl.textContent = fmtTime(recSeconds);
+                        if (recSeconds >= 120) stopRec(); // max 2 min
+                    }, 1000);
+                } catch (e) {
+                    alert("Microphone access denied / Mic permission නැත");
+                }
+            }
+
+            function stopRec() {
+                if (!isRecording || !mediaRecorder) return;
+                isRecording = false;
+                clearInterval(recTimerInterval);
+                overlay.classList.add('hidden');
+                btn.classList.remove('recording');
+                if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            }
+
+            // Touch events (mobile)
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); startRec(); }, { passive: false });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); stopRec(); }, { passive: false });
+            btn.addEventListener('touchcancel', (e) => { e.preventDefault(); cancelRecording = true; stopRec(); }, { passive: false });
+
+            // Mouse events (desktop)
+            btn.addEventListener('mousedown', startRec);
+            btn.addEventListener('mouseup', stopRec);
+            btn.addEventListener('mouseleave', () => { if (isRecording) stopRec(); });
+
+            // Cancel button
+            cancelBtn.addEventListener('click', () => {
+                cancelRecording = true;
+                stopRec();
+            });
+        }
+
+        function startChat(roomId) {
+            currentRoom = roomId;
+            document.getElementById('finding-overlay').classList.add('hidden');
+            document.getElementById('main-dashboard').classList.add('hidden');
+            document.getElementById('chat-screen').classList.remove('hidden');
+            const msgBox = document.getElementById('chat-messages');
+            msgBox.innerHTML = '<div class="system-msg">Connected / සම්බන්ධ විය</div>';
+
+            // Show stranger username
+            const strangerName = roomId.split('_').find(u => u !== myUser);
+            document.getElementById('stranger-name').textContent = strangerName || 'Stranger';
+
+            setupVoiceButton();
+
+            // Room deleted (stranger left) → auto-delete voice messages handled by removing room
+            onValue(ref(db, `rooms/${roomId}`), (s) => {
+                if (!s.exists()) {
+                    document.getElementById('left-alert-box').classList.remove('hidden');
+                    document.getElementById('input-container').style.opacity = "0.2";
+                    document.getElementById('input-container').style.pointerEvents = "none";
+                    document.getElementById('end-btn').classList.add('hidden');
+                }
+            });
+
+            onValue(ref(db, `rooms/${roomId}/messages`), (s) => {
+                if (s.exists()) {
+                    const msgs = Object.values(s.val());
+                    msgBox.innerHTML = '<div class="system-msg">Connected / සම්බන්ධ විය</div>';
+                    msgs.forEach(m => {
+                        if (m.type === 'voice') {
+                            const bubble = renderVoiceBubble(m.sender === myUser, m.audio, m.duration);
+                            msgBox.appendChild(bubble);
+                        } else {
+                            const div = document.createElement('div');
+                            div.className = m.sender === myUser ? 'msg-me' : 'msg-stranger';
+                            div.textContent = m.text;
+                            msgBox.appendChild(div);
+                        }
+                    });
+                    if (msgs.length > lastMsgCount && msgs[msgs.length - 1].sender !== myUser) {
+                        msgSound.play().catch(() => {});
+                    }
+                    lastMsgCount = msgs.length;
+                    msgBox.scrollTop = msgBox.scrollHeight;
+                }
+            });
+        }
+
+        window.sendMsg = () => {
+            const inp = document.getElementById('msg-input');
+            if (!inp.value || !currentRoom) return;
+            push(ref(db, `rooms/${currentRoom}/messages`), { sender: myUser, type: 'text', text: inp.value });
+            inp.value = "";
+        };
+
+        // endChat removes entire room → all messages (including voice) deleted automatically
+        window.endChat = () => {
+            if (currentRoom) remove(ref(db, `rooms/${currentRoom}`));
+            location.reload();
+        };
+
+        function loadAdminData() {
+            onValue(ref(db, 'users'), (s) => {
+                const list = document.getElementById('user-list');
+                list.innerHTML = "";
+                if (s.exists()) {
+                    Object.entries(s.val()).forEach(([u, d]) => {
+                        if (u === "admin") return;
+                        const isApproved = d.approved && Date.now() < d.expiry;
+                        const userDiv = document.createElement('div');
+                        userDiv.className = `p-4 glass-panel rounded-2xl flex justify-between items-center border ${isApproved ? 'border-emerald-500/50' : 'border-white/5'}`;
+                        userDiv.innerHTML = `
+                            <div>
+                                <p class="font-bold ${isApproved ? 'text-emerald-400' : 'text-pink-500'}">${u}</p>
+                                <p class="text-[9px] text-white/50 font-mono mt-0.5">🔑 ${d.password}</p>
+                                <p class="text-[8px] opacity-40">${isApproved ? 'APPROVED' : 'PENDING'}</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="approveUser('${u}')" class="${isApproved ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-600 text-white'} px-3 py-2 rounded-xl text-[10px] font-black uppercase">
+                                    ${isApproved ? 'Extend' : 'Approve'}
+                                </button>
+                                <button onclick="deleteUser('${u}')" class="bg-red-500/20 text-red-500 border border-red-500/30 px-3 py-2 rounded-xl text-[10px] font-black uppercase">Del</button>
+                            </div>
+                        `;
+                        list.appendChild(userDiv);
+                    });
+                }
+            });
+        }
+
+        window.approveUser = (u) => update(ref(db, `users/${u}`), { approved: true, expiry: Date.now() + 2592000000 });
+        window.deleteUser = (u) => { if (confirm(`Delete user ${u}?`)) remove(ref(db, `users/${u}`)); };
+
+        window.onload = async () => {
+            if (myUser) {
+                const s = await get(ref(db, `users/${myUser}`));
+                if (s.exists()) {
+                    const d = Math.ceil((s.val().expiry - Date.now()) / 86400000);
+                    document.getElementById('days-tag').innerText = (d > 0 ? d : 0) + " Days Remaining / දින ඉතිරිව ඇත";
+                    document.getElementById('main-dashboard').classList.remove('hidden');
+                } else logout();
+            } else document.getElementById('login-screen').classList.remove('hidden');
+        };
+
+        // Enter key to send text
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { const i = document.getElementById('msg-input'); if (i === document.activeElement) window.sendMsg(); }
+        });
+    </script>
+</body>
+</html>
