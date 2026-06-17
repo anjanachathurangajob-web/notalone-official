@@ -71,29 +71,9 @@
             if(s.exists() && s.val().password === p) {
                 if(s.val().approved && Date.now() < s.val().expiry) {
                     localStorage.setItem('chatUser', u); location.reload();
-                } else {
-                    showExpiredScreen(u, s.val());
-                }
+                } else alert("Account Not Approved!");
             } else alert("Invalid Login!");
         };
-
-        function showExpiredScreen(username, data) {
-            document.getElementById('login-screen').classList.add('hidden');
-            document.getElementById('expired-screen').classList.remove('hidden');
-            const isNeverApproved = !data.approved && data.expiry === 0;
-            document.getElementById('expired-title').innerText = isNeverApproved ? "Account Not Approved Yet" : "Account Expired";
-            document.getElementById('expired-title-si').innerText = isNeverApproved ? "ගිණුම තවම අනුමත කර නැත" : "ගිණුමේ කාලය ඉකුත් වී ඇත";
-            document.getElementById('reactivate-btn').onclick = () => {
-                const msg = isNeverApproved
-                    ? `Hi Admin, my account is waiting for approval.\nUsername: ${username}\nPlease approve my account.`
-                    : `Hi Admin, my Not Alone account has expired.\nUsername: ${username}\nPlease reactivate my account for another 30 days.`;
-                window.open(`https://wa.me/${MY_WHATSAPP}?text=${encodeURIComponent(msg)}`);
-            };
-            document.getElementById('expired-back-btn').onclick = () => {
-                document.getElementById('expired-screen').classList.add('hidden');
-                document.getElementById('login-screen').classList.remove('hidden');
-            };
-        }
 
         window.handleRegister = async () => {
             const u = document.getElementById('reg-user').value.trim();
@@ -230,27 +210,12 @@
         function loadAdminData() {
             onValue(ref(db, 'users'), (s) => {
                 const list = document.getElementById('user-list'); list.innerHTML = "";
-                const now = Date.now();
                 Object.entries(s.val()).forEach(([u, d]) => {
                     const isApproved = d.approved === true;
-                    const isExpired = isApproved && d.expiry < now;
-                    let statusBadge = "";
-                    let cardClass = "glass-panel";
-                    if(isExpired) { statusBadge = '<p class="text-[9px] text-red-400 font-bold uppercase mt-1">⚠ Expired</p>'; cardClass = "bg-red-500/10 border border-red-500/30"; }
-                    else if(isApproved) { statusBadge = '<p class="text-[9px] text-emerald-400 font-bold uppercase mt-1">✓ Active</p>'; cardClass = "bg-emerald-500/20 border border-emerald-500/30"; }
-                    else { statusBadge = '<p class="text-[9px] text-yellow-400 font-bold uppercase mt-1">⏳ Pending</p>'; }
-
-                    list.innerHTML += `<div class="p-4 rounded-xl mb-3 flex justify-between items-center ${cardClass}">
-                        <div>
-                            <p class="font-bold text-sm ${isApproved && !isExpired ? 'text-emerald-400' : 'text-white'}">${u}</p>
-                            <p class="text-[9px] opacity-60">PW: ${d.password}</p>
-                            ${statusBadge}
-                        </div>
-                        <div class="flex gap-2 flex-wrap justify-end">
-                            ${isExpired
-                                ? `<button onclick="reactivateUser('${u}')" class="bg-blue-600 px-3 py-1 rounded-lg text-[9px] font-bold uppercase">Reactivate</button>`
-                                : `<button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-1 rounded-lg text-[9px] font-bold uppercase">Approve</button>`
-                            }
+                    list.innerHTML += `<div class="p-4 rounded-xl mb-3 flex justify-between items-center ${isApproved ? 'bg-emerald-500/20 border border-emerald-500/30' : 'glass-panel'}">
+                        <div><p class="font-bold text-sm ${isApproved ? 'text-emerald-400' : 'text-white'}">${u}</p><p class="text-[9px] opacity-60">PW: ${d.password}</p></div>
+                        <div class="flex gap-2">
+                            <button onclick="approveUser('${u}')" class="bg-emerald-600 px-3 py-1 rounded-lg text-[9px] font-bold uppercase">Approve</button>
                             <button onclick="deleteUser('${u}')" class="bg-red-600 px-3 py-1 rounded-lg text-[9px] font-bold uppercase">Del</button>
                         </div>
                     </div>`;
@@ -258,23 +223,13 @@
             });
         }
         window.approveUser = (u) => update(ref(db, `users/${u}`), { approved: true, expiry: Date.now() + 2592000000 });
-        window.reactivateUser = (u) => {
-            update(ref(db, `users/${u}`), { approved: true, expiry: Date.now() + 2592000000 });
-            alert("✅ " + u + " reactivated for 30 more days!");
-        };
         window.deleteUser = (u) => remove(ref(db, `users/${u}`));
 
         window.onload = async () => {
             if(myUser) {
                 const s = await get(ref(db, `users/${myUser}`));
                 if(s.exists()) {
-                    const data = s.val();
-                    if(!data.approved || Date.now() >= data.expiry) {
-                        localStorage.clear();
-                        showExpiredScreen(myUser, data);
-                        return;
-                    }
-                    const days = Math.ceil((data.expiry - Date.now()) / 86400000);
+                    const days = Math.ceil((s.val().expiry - Date.now()) / 86400000);
                     document.getElementById('days-tag').innerText = (days > 0 ? days : 0) + " Days Remaining";
                     document.getElementById('main-dashboard').classList.remove('hidden');
                 } else { logout(); }
@@ -318,22 +273,6 @@
                 <button onclick="handleRegister()" class="w-full bg-emerald-600 py-4 rounded-2xl font-bold uppercase">Register / ලියාපදිංචි වන්න</button>
                 <p onclick="document.getElementById('reg-box').classList.add('hidden'); document.getElementById('login-box').classList.remove('hidden');" class="text-center text-[10px] mt-6 opacity-30 cursor-pointer uppercase font-bold">Back to Login / ආපසු</p>
             </div>
-        </div>
-    </div>
-
-    <div id="expired-screen" class="hidden flex-1 flex flex-col justify-center max-w-sm mx-auto text-center">
-        <div class="glass-panel p-8 rounded-[2.5rem]">
-            <div class="text-5xl mb-4">⏰</div>
-            <h2 id="expired-title" class="text-xl font-black text-red-400 uppercase mb-1">Account Expired</h2>
-            <p id="expired-title-si" class="text-sm text-white/60 mb-6">ගිණුමේ කාලය ඉකුත් වී ඇත</p>
-            <p class="text-xs text-white/50 mb-6 leading-relaxed">
-                Your account needs to be reactivated to continue chatting.<br>
-                <span class="text-white/70">තවදුරටත් චැට් කිරීමට ගිණුම reactivate කරගත යුතුය.</span>
-            </p>
-            <button id="reactivate-btn" class="w-full btn-gradient py-4 rounded-2xl font-bold uppercase shadow-lg mb-3">
-                💚 Reactivate via WhatsApp
-            </button>
-            <p id="expired-back-btn" class="text-center text-[10px] mt-3 opacity-40 underline uppercase font-bold cursor-pointer">Back to Login / ආපසු</p>
         </div>
     </div>
 
